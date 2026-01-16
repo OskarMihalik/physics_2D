@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::helpers::to_vec3;
+
 #[derive(Component)]
 pub enum FlatBody {
     Static(FlatBodyParameters),
@@ -21,8 +23,8 @@ pub struct FlatBodyParameters {
 impl FlatBodyParameters {
     pub fn compute_area(&mut self) {
         self.area = match &self.shape {
-            Shape::Circle { radius } => std::f32::consts::PI * radius * radius,
-            Shape::Box { width, height } => width * height,
+            Shape::Circle(radius) => std::f32::consts::PI * radius.radius * radius.radius,
+            Shape::Box(BoxParams { width, height }) => width * height,
         };
     }
     pub fn new(shape: Shape, density: f32) -> Self {
@@ -44,12 +46,42 @@ impl Default for FlatBody {
 }
 
 pub enum Shape {
-    Circle { radius: f32 },
-    Box { width: f32, height: f32 },
+    Circle(CircleParams),
+    Box(BoxParams),
 }
 
 impl Default for Shape {
     fn default() -> Self {
-        Shape::Circle { radius: 25.0 }
+        Shape::Circle(CircleParams { radius: 25.0 })
+    }
+}
+
+pub struct CircleParams {
+    pub radius: f32,
+}
+
+pub struct BoxParams {
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Event)]
+pub struct MoveFlatBody {
+    pub entity: Entity,
+    pub amount: Vec2,
+}
+
+pub fn on_move_flat_body(
+    trigger: On<MoveFlatBody>,
+    mut query: Query<(&mut Transform, &mut FlatBody)>,
+) {
+    let body = query.get_mut(trigger.entity);
+
+    match body {
+        Ok(mut body) => {
+            body.0.translation += to_vec3(&trigger.amount);
+            info!("moving")
+        }
+        _ => {}
     }
 }
