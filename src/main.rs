@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use bevy::prelude::*;
+use bevy::{math::VectorSpace, mesh::VertexAttributeValues, prelude::*};
 mod flat_body;
 mod mouse_position;
 use flat_body::FlatBody;
@@ -8,11 +8,12 @@ mod collisions;
 mod helpers;
 
 use crate::{
-    collisions::intersect_circle_circle,
+    collisions::{Collider, intersect_circle_circle, intersects_polygons},
     flat_body::{
-        BoxParams, CircleParams, FlatBodyParameters, MoveFlatBody, Shape, on_move_flat_body,
+        BoxParams, CircleParams, FlatBodyParameters, MoveFlatBody, on_move_flat_body,
+        on_rotate_flat_body,
     },
-    helpers::to_vec2,
+    helpers::{get_global_vertices, to_vec2},
     mouse_position::{MousePositionPlugin, MyWorldCoords},
 };
 
@@ -27,6 +28,7 @@ fn main() {
             (move_physics_objects, collision_system).chain(),
         )
         .add_observer(on_move_flat_body)
+        .add_observer(on_rotate_flat_body)
         .run();
 }
 
@@ -48,29 +50,31 @@ fn setup(
 
     // Ceiling
     commands.spawn((
-        square_sprite.clone(),
+        // square_sprite.clone(),
+        Mesh2d(meshes.add(Rectangle::new(1000.0, 30.))),
+        MeshMaterial2d(materials.add(Color::srgb(0., 0., 1.))),
         Transform::from_xyz(0.0, 50.0 * -11.0, 0.0),
-        // RigidBody::Static,
-        // Collider::rectangle(50.0, 50.0),
-        FlatBody::Static(FlatBodyParameters::new(
-            Shape::Box(BoxParams {
-                width: 1000.0,
-                height: 30.0,
-            }),
-            0.,
-        )),
+        FlatBody::Static(FlatBodyParameters::new(0.)),
+        Collider::Box(BoxParams::new(1000., 30.)),
     ));
 
     commands.spawn((
         Mesh2d(meshes.add(Circle::new(50.0))),
         MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
         Transform::from_xyz(0., 0., 0.0),
-        FlatBody::Dynamic(FlatBodyParameters::new(
-            Shape::Circle(CircleParams { radius: 50.0 }),
-            1.,
-        )),
+        FlatBody::Dynamic(FlatBodyParameters::new(1.)),
+        Collider::Circle(CircleParams::new(50.)),
         UserMovable {},
     ));
+
+    // commands.spawn((
+    //     Mesh2d(meshes.add(Rectangle::new(100.0, 100.))),
+    //     MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
+    //     Transform::from_xyz(0., 0., 0.0),
+    //     FlatBody::Dynamic(FlatBodyParameters::new(1.)),
+    //     Collider::Box(BoxParams::new(100., 100.)),
+    //     UserMovable {},
+    // ));
 }
 
 fn movement(
@@ -125,29 +129,17 @@ fn spawn_physics_object(
             Mesh2d(meshes.add(Circle::new(50.0))),
             MeshMaterial2d(materials.add(Color::srgb(random_red, random_green, random_blue))),
             Transform::from_xyz(cursor_position.0.x, cursor_position.0.y, 0.0),
-            FlatBody::Dynamic(FlatBodyParameters::new(
-                Shape::Circle(CircleParams { radius: 50.0 }),
-                1.,
-            )),
+            FlatBody::Dynamic(FlatBodyParameters::new(1.)),
+            Collider::Circle(CircleParams::new(50.)),
         ));
     } else if buttons.just_pressed(MouseButton::Right) {
-        let square_sprite = Sprite {
-            color: Color::srgb(random_red, random_green, random_blue),
-            custom_size: Some(Vec2::splat(100.0)),
-            ..default()
-        };
-
-        // Ceiling
+        // square
         commands.spawn((
-            square_sprite.clone(),
+            Mesh2d(meshes.add(Rectangle::new(100.0, 100.))),
+            MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
             Transform::from_xyz(cursor_position.0.x, cursor_position.0.y, 0.0),
-            FlatBody::Dynamic(FlatBodyParameters::new(
-                Shape::Box(BoxParams {
-                    width: 100.0,
-                    height: 100.0,
-                }),
-                1.,
-            )),
+            FlatBody::Dynamic(FlatBodyParameters::new(1.)),
+            Collider::Box(BoxParams::new(100., 100.)),
         ));
     }
 }
@@ -166,8 +158,12 @@ fn move_physics_objects(
                 // Update rotation based on rotational velocity
                 let rotation_radians = params.rotational_velocity.to_radians();
                 let current_rotation = transform.rotation.to_euler(EulerRot::XYZ).2;
-                transform.rotation =
-                    Quat::from_euler(EulerRot::XYZ, 0.0, 0.0, current_rotation + rotation_radians);
+                transform.rotation = Quat::from_euler(
+                    EulerRot::XYZ,
+                    0.0,
+                    0.0,
+                    current_rotation + 0.5_f32.to_radians(),
+                );
             }
             FlatBody::Static(_) => {
                 // Static bodies do not move
@@ -176,20 +172,34 @@ fn move_physics_objects(
     }
 }
 
-fn collision_system(mut query: Query<(Entity, &Transform, &FlatBody)>, mut commands: Commands) {
-    let entities: Vec<(Entity, &Transform, &FlatBody)> = query.iter().collect();
+fn collision_system(
+    mut query: Query<(Entity, &Transform, &FlatBody, &Mesh2d, &Collider)>,
+    mut commands: Commands,
+    mut meshes: Res<Assets<Mesh>>,
+) {
+    let entities: Vec<(Entity, &Transform, &FlatBody, &Mesh2d, &Collider)> = query.iter().collect();
 
     for i in 0..entities.len() {
         for j in (i + 1)..entities.len() {
-            let (entity_a, pos_a, flat_body_a) = entities[i];
-            let (entity_b, pos_b, flat_body_b) = entities[j];
+            let (entity_a, pos_a, flat_body_a, mesh2d_a, collider_a) = entities[i];
+            let (entity_b, pos_b, flat_body_b, mesh2d_b, collider_b) = entities[j];
 
-            let dynamic = match (flat_body_a, flat_body_b) {
+            // match flat_body_a {
+            //     FlatBody::Static(flat_body_parameters) => {
+            //         info!("static asss");
+            //         if let Shape::Box(shape) = &flat_body_parameters.shape {
+            //             info!("{:#?}", positions);
+            //         }
+            //     }
+            //     _ => (),
+            // }
+
+            match (flat_body_a, flat_body_b) {
                 (
                     FlatBody::Dynamic(flat_body_dynamic_a),
                     FlatBody::Dynamic(flat_body_dynamic_b),
-                ) => match (&flat_body_dynamic_a.shape, &flat_body_dynamic_b.shape) {
-                    (Shape::Circle(circle_a), Shape::Circle(circle_b)) => {
+                ) => match (&collider_a, &collider_b) {
+                    (Collider::Circle(circle_a), Collider::Circle(circle_b)) => {
                         let res = intersect_circle_circle(
                             to_vec2(&pos_a.translation),
                             circle_a.radius,
@@ -207,9 +217,34 @@ fn collision_system(mut query: Query<(Entity, &Transform, &FlatBody)>, mut comma
                             });
                         }
                     }
+                    (Collider::Box(box_params_a), Collider::Box(box_params_b)) => {
+                        let vertices_a = get_global_vertices(mesh2d_a, &meshes).unwrap();
+                        let vertices_b = get_global_vertices(mesh2d_b, &meshes).unwrap();
+                        info!("{:?} {:?}", vertices_a, vertices_b);
+                        if intersects_polygons(&vertices_a, &vertices_b) {
+                            info!("box collision");
+                        }
+                    }
                     _ => {}
                 },
-                _ => {}
+                (
+                    FlatBody::Static(flat_body_parameters_a),
+                    FlatBody::Static(flat_body_parameters_b),
+                ) => {
+                    // info!("collision static static")
+                }
+                (
+                    FlatBody::Static(flat_body_parameters_a),
+                    FlatBody::Dynamic(flat_body_parameters_b),
+                ) => {
+                    // info!("collision static dynamic")
+                }
+                (
+                    FlatBody::Dynamic(flat_body_parameters_a),
+                    FlatBody::Static(flat_body_parameters_b),
+                ) => {
+                    // info!("collision dynamic static")
+                }
             };
         }
     }
