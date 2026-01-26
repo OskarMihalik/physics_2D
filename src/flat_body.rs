@@ -54,12 +54,12 @@ pub struct BoxParams {
     pub width: f32,
     pub height: f32,
     pub area: f32,
-    verticies: [Vec2; 4],
+    pub verticies: [Vec2; 4],
 }
 
 impl BoxParams {
     pub fn new(width: f32, height: f32) -> Self {
-        let left = width / 2.;
+        let left = -width / 2.;
         let right = left + width;
         let bottom = -height / 2.;
         let top = bottom + height;
@@ -67,8 +67,8 @@ impl BoxParams {
         let verticies = [
             Vec2::new(left, top),
             Vec2::new(right, top),
-            Vec2::new(left, bottom),
             Vec2::new(right, bottom),
+            Vec2::new(left, bottom),
         ];
 
         let area = width * height;

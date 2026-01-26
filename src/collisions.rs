@@ -46,13 +46,13 @@ pub fn intersect_circle_circle(
     })
 }
 
-pub fn intersects_polygons(vertices_a: &Vec<Vec3>, vertices_b: &Vec<Vec3>) -> bool {
+pub fn intersects_polygons(vertices_a: &[Vec2; 4], vertices_b: &[Vec2; 4]) -> bool {
     for i in 0..vertices_a.len() {
         let va = vertices_a[i];
         let vb = vertices_a[(i + 1) % vertices_a.len()];
 
         let edge = vb - va;
-        let axis = Vec3::new(-edge.x, edge.y, 0.);
+        let axis = Vec2::new(-edge.x, edge.y);
         let (min_a, max_a) = project_vertices(vertices_a, &axis);
         let (min_b, max_b) = project_vertices(vertices_b, &axis);
 
@@ -66,7 +66,7 @@ pub fn intersects_polygons(vertices_a: &Vec<Vec3>, vertices_b: &Vec<Vec3>) -> bo
         let vb = vertices_b[(i + 1) % vertices_b.len()];
 
         let edge = vb - va;
-        let axis = Vec3::new(-edge.x, edge.y, 0.);
+        let axis = Vec2::new(-edge.x, edge.y);
         let (min_a, max_a) = project_vertices(vertices_a, &axis);
         let (min_b, max_b) = project_vertices(vertices_b, &axis);
 
@@ -78,12 +78,12 @@ pub fn intersects_polygons(vertices_a: &Vec<Vec3>, vertices_b: &Vec<Vec3>) -> bo
     return true;
 }
 
-fn project_vertices(vertices: &Vec<Vec3>, axis: &Vec3) -> (f32, f32) {
-    let mut max = f32::MAX;
-    let mut min = f32::MIN;
+fn project_vertices(vertices: &[Vec2; 4], axis: &Vec2) -> (f32, f32) {
+    let mut max = f32::MIN;
+    let mut min = f32::MAX;
 
     for vertex in vertices {
-        let projektion = axis.dot(*vertex);
+        let projektion = vertex.dot(*axis);
         if projektion < min {
             min = projektion
         }

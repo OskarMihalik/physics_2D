@@ -1,4 +1,11 @@
-use bevy::{mesh::VertexAttributeValues, prelude::*};
+use bevy::{
+    math::{
+        VectorSpace,
+        ops::{cos, sin},
+    },
+    mesh::VertexAttributeValues,
+    prelude::*,
+};
 
 pub fn to_vec2(vec3: &Vec3) -> Vec2 {
     Vec2::new(vec3.x, vec3.y)
@@ -8,33 +15,17 @@ pub fn to_vec3(vec2: &Vec2) -> Vec3 {
     Vec3::new(vec2.x, vec2.y, 0.)
 }
 
-pub fn get_global_vertices(
-    mesh2d: &Mesh2d,
-    meshes_res: &Res<'_, Assets<Mesh>>,
-) -> Result<Vec<Vec3>, String> {
-    let mesh = meshes_res
-        .get(&mesh2d.0)
-        .expect("mesh2d unavailable in meshes database");
+pub fn get_global_vertices(transform: &Transform, verticies: &[Vec2; 4]) -> [Vec2; 4] {
+    let mut new_verticies: [Vec2; 4] = [Vec2::ZERO; 4];
 
-    let attribute = match mesh.attribute(Mesh::ATTRIBUTE_POSITION) {
-        Some(attr) => attr,
-        None => {
-            info!("Mesh2d mesh asset doesn't have positions. WEIRD");
-            return Err("Mesh2d mesh asset doesn't have positions. WEIRD".to_string());
-        }
-    };
+    for (i, vertex) in verticies.iter().enumerate() {
+        // Transform the vertex by applying rotation and translation
+        let rotated = transform
+            .rotation
+            .mul_vec3(Vec3::new(vertex.x, vertex.y, 0.));
+        let transformed_point = transform.translation + rotated;
+        new_verticies[i] = to_vec2(&transformed_point);
+    }
 
-    let positions = match attribute {
-        &VertexAttributeValues::Float32x3(ref positions) => positions,
-        _ => {
-            info!("Mesh2d mesh asset has unexpected vertex attribute format");
-            return Err("Mesh2d mesh asset has unexpected vertex attribute format".to_string());
-        }
-    };
-    let vertices: Vec<Vec3> = positions
-        .iter()
-        .map(|pos| return Vec3::new(pos[0], pos[1], pos[2]))
-        .collect();
-
-    return Ok(vertices);
+    return new_verticies;
 }

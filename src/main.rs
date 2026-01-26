@@ -1,6 +1,8 @@
-use std::ops::Deref;
+use std::{f32::consts::PI, ops::Deref};
 
-use bevy::{math::VectorSpace, mesh::VertexAttributeValues, prelude::*};
+use bevy::{
+    color::palettes::css::LIME, math::VectorSpace, mesh::VertexAttributeValues, prelude::*,
+};
 mod flat_body;
 mod mouse_position;
 use flat_body::FlatBody;
@@ -58,23 +60,23 @@ fn setup(
         Collider::Box(BoxParams::new(1000., 30.)),
     ));
 
-    commands.spawn((
-        Mesh2d(meshes.add(Circle::new(50.0))),
-        MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
-        Transform::from_xyz(0., 0., 0.0),
-        FlatBody::Dynamic(FlatBodyParameters::new(1.)),
-        Collider::Circle(CircleParams::new(50.)),
-        UserMovable {},
-    ));
-
     // commands.spawn((
-    //     Mesh2d(meshes.add(Rectangle::new(100.0, 100.))),
+    //     Mesh2d(meshes.add(Circle::new(50.0))),
     //     MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
     //     Transform::from_xyz(0., 0., 0.0),
     //     FlatBody::Dynamic(FlatBodyParameters::new(1.)),
-    //     Collider::Box(BoxParams::new(100., 100.)),
+    //     Collider::Circle(CircleParams::new(50.)),
     //     UserMovable {},
     // ));
+
+    commands.spawn((
+        Mesh2d(meshes.add(Rectangle::new(100.0, 100.))),
+        MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
+        Transform::from_xyz(0., 0., 0.0),
+        FlatBody::Dynamic(FlatBodyParameters::new(1.)),
+        Collider::Box(BoxParams::new(100., 100.)),
+        UserMovable {},
+    ));
 }
 
 fn movement(
@@ -176,6 +178,7 @@ fn collision_system(
     mut query: Query<(Entity, &Transform, &FlatBody, &Mesh2d, &Collider)>,
     mut commands: Commands,
     mut meshes: Res<Assets<Mesh>>,
+    mut gizmos: Gizmos,
 ) {
     let entities: Vec<(Entity, &Transform, &FlatBody, &Mesh2d, &Collider)> = query.iter().collect();
 
@@ -218,9 +221,30 @@ fn collision_system(
                         }
                     }
                     (Collider::Box(box_params_a), Collider::Box(box_params_b)) => {
-                        let vertices_a = get_global_vertices(mesh2d_a, &meshes).unwrap();
-                        let vertices_b = get_global_vertices(mesh2d_b, &meshes).unwrap();
+                        let vertices_a = get_global_vertices(&pos_a, &box_params_a.verticies);
+                        let vertices_b = get_global_vertices(&pos_b, &box_params_b.verticies);
                         info!("{:?} {:?}", vertices_a, vertices_b);
+                        for vertex in vertices_a {
+                            gizmos.rect(
+                                Isometry3d::new(
+                                    Vec3::new(vertex.x, vertex.y, 0.),
+                                    Quat::from_rotation_y(PI / 2.),
+                                ),
+                                Vec2::splat(5.),
+                                LIME,
+                            );
+                        }
+                        for vertex in vertices_b {
+                            gizmos.rect(
+                                Isometry3d::new(
+                                    Vec3::new(vertex.x, vertex.y, 0.),
+                                    Quat::from_rotation_y(PI / 2.),
+                                ),
+                                Vec2::splat(5.),
+                                LIME,
+                            );
+                        }
+
                         if intersects_polygons(&vertices_a, &vertices_b) {
                             info!("box collision");
                         }
