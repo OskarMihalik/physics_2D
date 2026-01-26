@@ -164,7 +164,8 @@ fn move_physics_objects(
                     EulerRot::XYZ,
                     0.0,
                     0.0,
-                    current_rotation + 0.5_f32.to_radians(),
+                    // current_rotation + 0.5_f32.to_radians(),
+                    0.,
                 );
             }
             FlatBody::Static(_) => {
@@ -223,7 +224,7 @@ fn collision_system(
                     (Collider::Box(box_params_a), Collider::Box(box_params_b)) => {
                         let vertices_a = get_global_vertices(&pos_a, &box_params_a.verticies);
                         let vertices_b = get_global_vertices(&pos_b, &box_params_b.verticies);
-                        info!("{:?} {:?}", vertices_a, vertices_b);
+                        // info!("{:?} {:?}", vertices_a, vertices_b);
                         for vertex in vertices_a {
                             gizmos.rect(
                                 Isometry3d::new(
@@ -245,8 +246,15 @@ fn collision_system(
                             );
                         }
 
-                        if intersects_polygons(&vertices_a, &vertices_b) {
-                            info!("box collision");
+                        if let Some(res) = intersects_polygons(&vertices_a, &vertices_b) {
+                            commands.trigger(MoveFlatBody {
+                                entity: entity_a,
+                                amount: -res.collision_normal * res.penetration_depth / 2.,
+                            });
+                            commands.trigger(MoveFlatBody {
+                                entity: entity_b,
+                                amount: res.collision_normal * res.penetration_depth / 2.,
+                            });
                         }
                     }
                     _ => {}
