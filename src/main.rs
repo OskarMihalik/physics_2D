@@ -10,7 +10,9 @@ mod collisions;
 mod helpers;
 
 use crate::{
-    collisions::{Collider, intersect_circle_circle, intersects_polygons},
+    collisions::{
+        Collider, intersect_circle_circle, intersect_circle_polygon, intersects_polygons,
+    },
     flat_body::{
         BoxParams, CircleParams, FlatBodyParameters, MoveFlatBody, on_move_flat_body,
         on_rotate_flat_body,
@@ -87,31 +89,32 @@ fn movement(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
+    let speed = 300.;
     let delta_time = time.delta_secs();
     let entity_a = marbles.single().unwrap();
     if keyboard_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {
         // Use a higher acceleration for upwards movement to overcome gravity
         commands.trigger(MoveFlatBody {
             entity: entity_a,
-            amount: Vec2::Y * delta_time * 100.,
+            amount: Vec2::Y * delta_time * speed,
         });
     }
     if keyboard_input.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]) {
         commands.trigger(MoveFlatBody {
             entity: entity_a,
-            amount: -Vec2::Y * delta_time * 100.,
+            amount: -Vec2::Y * delta_time * speed,
         });
     }
     if keyboard_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) {
         commands.trigger(MoveFlatBody {
             entity: entity_a,
-            amount: -Vec2::X * delta_time * 100.,
+            amount: -Vec2::X * delta_time * speed,
         });
     }
     if keyboard_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) {
         commands.trigger(MoveFlatBody {
             entity: entity_a,
-            amount: Vec2::X * delta_time * 100.,
+            amount: Vec2::X * delta_time * speed,
         });
     }
 }
@@ -224,29 +227,44 @@ fn collision_system(
                     (Collider::Box(box_params_a), Collider::Box(box_params_b)) => {
                         let vertices_a = get_global_vertices(&pos_a, &box_params_a.verticies);
                         let vertices_b = get_global_vertices(&pos_b, &box_params_b.verticies);
-                        // info!("{:?} {:?}", vertices_a, vertices_b);
-                        for vertex in vertices_a {
-                            gizmos.rect(
-                                Isometry3d::new(
-                                    Vec3::new(vertex.x, vertex.y, 0.),
-                                    Quat::from_rotation_y(PI / 2.),
-                                ),
-                                Vec2::splat(5.),
-                                LIME,
-                            );
-                        }
-                        for vertex in vertices_b {
-                            gizmos.rect(
-                                Isometry3d::new(
-                                    Vec3::new(vertex.x, vertex.y, 0.),
-                                    Quat::from_rotation_y(PI / 2.),
-                                ),
-                                Vec2::splat(5.),
-                                LIME,
-                            );
-                        }
 
                         if let Some(res) = intersects_polygons(&vertices_a, &vertices_b) {
+                            commands.trigger(MoveFlatBody {
+                                entity: entity_a,
+                                amount: -res.collision_normal * res.penetration_depth / 2.,
+                            });
+                            commands.trigger(MoveFlatBody {
+                                entity: entity_b,
+                                amount: res.collision_normal * res.penetration_depth / 2.,
+                            });
+                        }
+                    }
+                    (Collider::Box(box_params), Collider::Circle(circle_params)) => {
+                        let vertices_a = get_global_vertices(&pos_a, &box_params.verticies);
+
+                        if let Some(res) = intersect_circle_polygon(
+                            &to_vec2(&pos_b.translation),
+                            circle_params.radius,
+                            &vertices_a,
+                        ) {
+                            commands.trigger(MoveFlatBody {
+                                entity: entity_a,
+                                amount: res.collision_normal * res.penetration_depth / 2.,
+                            });
+                            commands.trigger(MoveFlatBody {
+                                entity: entity_b,
+                                amount: -res.collision_normal * res.penetration_depth / 2.,
+                            });
+                        }
+                    }
+                    (Collider::Circle(circle_params), Collider::Box(box_params)) => {
+                        let vertices_a = get_global_vertices(&pos_b, &box_params.verticies);
+
+                        if let Some(res) = intersect_circle_polygon(
+                            &to_vec2(&pos_a.translation),
+                            circle_params.radius,
+                            &vertices_a,
+                        ) {
                             commands.trigger(MoveFlatBody {
                                 entity: entity_a,
                                 amount: -res.collision_normal * res.penetration_depth / 2.,

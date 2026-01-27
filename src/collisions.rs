@@ -1,4 +1,5 @@
 use core::f32;
+use std::i16::MAX;
 
 use bevy::{
     ecs::component::Component,
@@ -24,6 +25,103 @@ pub fn compute_area(collider: &Collider) -> f32 {
 pub struct CollisionDetails {
     pub penetration_depth: f32,
     pub collision_normal: Vec2,
+}
+
+fn find_closes_point_on_polygon(circle_center: &Vec2, vertices: &[Vec2; 4]) -> Option<usize> {
+    let mut result = None;
+    let mut min_distance = f32::MAX;
+
+    for (i, vertex) in vertices.iter().enumerate() {
+        let distance = vertex.distance(*circle_center);
+        if distance < min_distance {
+            min_distance = distance;
+            result = Some(i);
+        }
+    }
+    result
+}
+
+fn project_circle(center: &Vec2, radius: f32, axis: &Vec2) -> (f32, f32) {
+    let direction = axis.normalize();
+    let direction_and_radius = direction * radius;
+
+    let p1 = center + direction_and_radius;
+    let p2 = center - direction_and_radius;
+
+    let mut min = p1.dot(*axis);
+    let mut max = p2.dot(*axis);
+
+    if min > max {
+        let temp = min;
+        min = max;
+        max = temp;
+    }
+
+    return (min, max);
+}
+
+pub fn intersect_circle_polygon(
+    circle_center: &Vec2,
+    circle_radius: f32,
+    vertices: &[Vec2; 4],
+) -> Option<CollisionDetails> {
+    let mut normal = Vec2::ZERO;
+    let mut depth = f32::MAX;
+    for i in 0..vertices.len() {
+        let va = vertices[i];
+        let vb = vertices[(i + 1) % vertices.len()];
+
+        let edge = vb - va;
+        let axis = Vec2::new(-edge.x, edge.y).normalize();
+        let (min_a, max_a) = project_vertices(vertices, &axis);
+        let (min_b, max_b) = project_circle(circle_center, circle_radius, &axis);
+
+        if min_a >= max_b || min_b >= max_a {
+            return None;
+        }
+
+        let axis_depth = (max_b - min_a).min(max_a - min_b);
+        if axis_depth < depth {
+            depth = axis_depth;
+            normal = axis;
+        }
+    }
+
+    let cp_index = match find_closes_point_on_polygon(circle_center, vertices) {
+        Some(value) => value,
+        None => return None,
+    };
+    let cp = vertices[cp_index];
+    let axis = (cp - circle_center).normalize();
+
+    let (min_a, max_a) = project_vertices(vertices, &axis);
+    let (min_b, max_b) = project_circle(circle_center, circle_radius, &axis);
+
+    if min_a >= max_b || min_b >= max_a {
+        return None;
+    }
+
+    let axis_depth = (max_b - min_a).min(max_a - min_b);
+    if axis_depth < depth {
+        depth = axis_depth;
+        normal = axis;
+    }
+
+    // depth /= normal.length();
+    // normal = normal.normalize();
+
+    let polygon_center = find_vertices_center(vertices);
+
+    let direction = polygon_center - circle_center;
+
+    if direction.dot(normal) < 0. {
+        normal = -normal;
+    }
+
+    return Some(CollisionDetails {
+        penetration_depth: depth,
+        collision_normal: normal,
+    });
 }
 
 pub fn intersect_circle_circle(
