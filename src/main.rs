@@ -7,6 +7,7 @@ mod flat_body;
 mod mouse_position;
 use flat_body::FlatBody;
 mod collisions;
+mod flat_world;
 mod helpers;
 
 use crate::{
@@ -17,6 +18,7 @@ use crate::{
         BoxParams, CircleParams, FlatBodyParameters, MoveFlatBody, on_move_flat_body,
         on_rotate_flat_body,
     },
+    flat_world::collide,
     helpers::{get_global_vertices, to_vec2},
     mouse_position::{MousePositionPlugin, MyWorldCoords},
 };
@@ -191,111 +193,19 @@ fn collision_system(
             let (entity_a, pos_a, flat_body_a, mesh2d_a, collider_a) = entities[i];
             let (entity_b, pos_b, flat_body_b, mesh2d_b, collider_b) = entities[j];
 
-            // match flat_body_a {
-            //     FlatBody::Static(flat_body_parameters) => {
-            //         info!("static asss");
-            //         if let Shape::Box(shape) = &flat_body_parameters.shape {
-            //             info!("{:#?}", positions);
-            //         }
-            //     }
-            //     _ => (),
-            // }
+            let collision = collide((pos_a, collider_a), (pos_b, collider_b));
 
-            match (flat_body_a, flat_body_b) {
-                (
-                    FlatBody::Dynamic(flat_body_dynamic_a),
-                    FlatBody::Dynamic(flat_body_dynamic_b),
-                ) => match (&collider_a, &collider_b) {
-                    (Collider::Circle(circle_a), Collider::Circle(circle_b)) => {
-                        let res = intersect_circle_circle(
-                            to_vec2(&pos_a.translation),
-                            circle_a.radius,
-                            to_vec2(&pos_b.translation),
-                            circle_b.radius,
-                        );
-                        if let Some(res) = res {
-                            commands.trigger(MoveFlatBody {
-                                entity: entity_a,
-                                amount: -res.collision_normal * res.penetration_depth / 2.,
-                            });
-                            commands.trigger(MoveFlatBody {
-                                entity: entity_b,
-                                amount: res.collision_normal * res.penetration_depth / 2.,
-                            });
-                        }
-                    }
-                    (Collider::Box(box_params_a), Collider::Box(box_params_b)) => {
-                        let vertices_a = get_global_vertices(&pos_a, &box_params_a.verticies);
-                        let vertices_b = get_global_vertices(&pos_b, &box_params_b.verticies);
-
-                        if let Some(res) = intersects_polygons(&vertices_a, &vertices_b) {
-                            commands.trigger(MoveFlatBody {
-                                entity: entity_a,
-                                amount: -res.collision_normal * res.penetration_depth / 2.,
-                            });
-                            commands.trigger(MoveFlatBody {
-                                entity: entity_b,
-                                amount: res.collision_normal * res.penetration_depth / 2.,
-                            });
-                        }
-                    }
-                    (Collider::Box(box_params), Collider::Circle(circle_params)) => {
-                        let vertices_a = get_global_vertices(&pos_a, &box_params.verticies);
-
-                        if let Some(res) = intersect_circle_polygon(
-                            &to_vec2(&pos_b.translation),
-                            circle_params.radius,
-                            &vertices_a,
-                        ) {
-                            commands.trigger(MoveFlatBody {
-                                entity: entity_a,
-                                amount: res.collision_normal * res.penetration_depth / 2.,
-                            });
-                            commands.trigger(MoveFlatBody {
-                                entity: entity_b,
-                                amount: -res.collision_normal * res.penetration_depth / 2.,
-                            });
-                        }
-                    }
-                    (Collider::Circle(circle_params), Collider::Box(box_params)) => {
-                        let vertices_a = get_global_vertices(&pos_b, &box_params.verticies);
-
-                        if let Some(res) = intersect_circle_polygon(
-                            &to_vec2(&pos_a.translation),
-                            circle_params.radius,
-                            &vertices_a,
-                        ) {
-                            commands.trigger(MoveFlatBody {
-                                entity: entity_a,
-                                amount: -res.collision_normal * res.penetration_depth / 2.,
-                            });
-                            commands.trigger(MoveFlatBody {
-                                entity: entity_b,
-                                amount: res.collision_normal * res.penetration_depth / 2.,
-                            });
-                        }
-                    }
-                    _ => {}
-                },
-                (
-                    FlatBody::Static(flat_body_parameters_a),
-                    FlatBody::Static(flat_body_parameters_b),
-                ) => {
-                    // info!("collision static static")
-                }
-                (
-                    FlatBody::Static(flat_body_parameters_a),
-                    FlatBody::Dynamic(flat_body_parameters_b),
-                ) => {
-                    // info!("collision static dynamic")
-                }
-                (
-                    FlatBody::Dynamic(flat_body_parameters_a),
-                    FlatBody::Static(flat_body_parameters_b),
-                ) => {
-                    // info!("collision dynamic static")
-                }
-            };
+            if let Some(collision_info) = collision {
+                commands.trigger(MoveFlatBody {
+                    entity: entity_a,
+                    amount: -collision_info.collision_normal * collision_info.penetration_depth
+                        / 2.,
+                });
+                commands.trigger(MoveFlatBody {
+                    entity: entity_b,
+                    amount: collision_info.collision_normal * collision_info.penetration_depth / 2.,
+                });
+            }
         }
     }
 }
