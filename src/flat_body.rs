@@ -5,36 +5,32 @@ use crate::{
     helpers::to_vec3,
 };
 
-#[derive(Component)]
-pub enum FlatBody {
-    Static(FlatBodyParameters),
-    Dynamic(FlatBodyParameters),
+#[derive(Default)]
+pub enum FlatBodyType {
+    Static,
+    #[default]
+    Dynamic,
 }
 
-#[derive(Default)]
-pub struct FlatBodyParameters {
+#[derive(Component, Default)]
+pub struct FlatBody {
     pub linear_velocity: Vec2,
     pub rotation: f32,
     pub rotational_velocity: f32,
-    // pub density: f32,
-    // pub mass: f32,
+    pub force: Vec2,
     pub restitution: f32,
+    pub mass: f32,
+    pub body_type: FlatBodyType,
 }
 
-impl FlatBodyParameters {
+impl FlatBody {
     pub fn new(density: f32) -> Self {
-        let mut params = FlatBodyParameters {
+        let mut params = FlatBody {
             // density,
             ..Default::default()
         };
         // params.mass = params.density * params.area;
         params
-    }
-}
-
-impl Default for FlatBody {
-    fn default() -> Self {
-        FlatBody::Dynamic(FlatBodyParameters::default())
     }
 }
 

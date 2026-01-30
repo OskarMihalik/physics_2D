@@ -9,6 +9,30 @@ use crate::{
 use bevy::mesh::Mesh2d;
 use bevy::prelude::*;
 
+#[derive(Resource)]
+pub struct FlatWorld {
+    pub force_magnitude: f32,
+}
+
+pub fn resolve_collision(
+    body_a: &FlatBody,
+    body_b: &FlatBody,
+    normal: &Vec2,
+    depth: f32,
+) -> (Vec2, Vec2) {
+    let relative_velocity = body_b.linear_velocity - body_a.linear_velocity;
+    let e = body_a.restitution.min(body_b.restitution);
+
+    let mut j = -(1. + e) * relative_velocity.dot(*normal);
+
+    j /= (1. / body_a.mass) + (1. / body_b.mass);
+
+    let a = -(j / body_a.mass * normal);
+    let b = j / body_b.mass * normal;
+
+    return (a, b);
+}
+
 pub fn collide(
     entity_a: (&Transform, &Collider),
     entity_b: (&Transform, &Collider),
