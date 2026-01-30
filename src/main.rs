@@ -143,14 +143,11 @@ fn spawn_physics_object(
     }
 }
 
-fn move_physics_objects(
-    mut commands: Commands,
-    mut query: Query<(Entity, &mut Transform, &mut FlatBody)>,
-) {
+fn move_physics_objects(mut query: Query<(Entity, &mut Transform, &mut FlatBody)>) {
     for (_entity, mut transform, mut flat_body) in query.iter_mut() {
         // Update position based on linear velocity
-        let force = flat_body.force;
-        flat_body.linear_velocity += force;
+        let acceleration = flat_body.force / flat_body.mass;
+        flat_body.linear_velocity += acceleration;
         transform.translation.x += flat_body.linear_velocity.x;
         transform.translation.y += flat_body.linear_velocity.y;
 

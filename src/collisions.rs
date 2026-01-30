@@ -107,9 +107,6 @@ pub fn intersect_circle_polygon(
         normal = axis;
     }
 
-    // depth /= normal.length();
-    // normal = normal.normalize();
-
     let polygon_center = find_vertices_center(vertices);
 
     let direction = polygon_center - circle_center;
@@ -158,7 +155,7 @@ pub fn intersects_polygons(
         let vb = vertices_a[(i + 1) % vertices_a.len()];
 
         let edge = vb - va;
-        let axis = Vec2::new(-edge.x, edge.y);
+        let axis = Vec2::new(-edge.x, edge.y).normalize();
         let (min_a, max_a) = project_vertices(vertices_a, &axis);
         let (min_b, max_b) = project_vertices(vertices_b, &axis);
 
@@ -178,7 +175,7 @@ pub fn intersects_polygons(
         let vb = vertices_b[(i + 1) % vertices_b.len()];
 
         let edge = vb - va;
-        let axis = Vec2::new(-edge.x, edge.y);
+        let axis = Vec2::new(-edge.x, edge.y).normalize();
         let (min_a, max_a) = project_vertices(vertices_a, &axis);
         let (min_b, max_b) = project_vertices(vertices_b, &axis);
 
@@ -192,9 +189,6 @@ pub fn intersects_polygons(
             normal = axis;
         }
     }
-
-    depth /= normal.length();
-    normal = normal.normalize();
 
     let center_a = find_vertices_center(vertices_a);
     let center_b = find_vertices_center(vertices_b);
