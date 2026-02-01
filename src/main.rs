@@ -19,7 +19,7 @@ fn main() {
         .add_plugins((DefaultPlugins, MousePositionPlugin))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
         .insert_resource(FlatWorld {
-            force_magnitude: 8.,
+            gravity: Vec2::new(0., -309.81),
         })
         .add_systems(Startup, setup)
         .add_systems(Update, (spawn_physics_object, movement))
@@ -45,11 +45,11 @@ fn setup(
     // Ceiling
     commands.spawn((
         // square_sprite.clone(),
-        Mesh2d(meshes.add(Rectangle::new(1000.0, 30.))),
+        Mesh2d(meshes.add(Rectangle::new(700.0, 30.))),
         MeshMaterial2d(materials.add(Color::srgb(0., 0., 1.))),
-        Transform::from_xyz(0.0, 50.0 * -11.0, 0.0),
-        FlatBody::new(1., FlatBodyType::Static, 2.),
-        Collider::Box(BoxParams::new(1000., 30.)),
+        Transform::from_xyz(0.0, 50.0 * -9.0, 0.0),
+        FlatBody::new(1., FlatBodyType::Static, 0.5),
+        Collider::Box(BoxParams::new(700., 30.)),
     ));
 
     // commands.spawn((
@@ -65,7 +65,7 @@ fn setup(
         Mesh2d(meshes.add(Rectangle::new(100.0, 100.))),
         MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
         Transform::from_xyz(0., 0., 0.0),
-        FlatBody::new(1., FlatBodyType::Dynamic, 2.),
+        FlatBody::new(1., FlatBodyType::Dynamic, 0.5),
         Collider::Box(BoxParams::new(100., 100.)),
         UserMovable {},
     ));
@@ -122,7 +122,7 @@ fn spawn_physics_object(
             Mesh2d(meshes.add(Circle::new(50.0))),
             MeshMaterial2d(materials.add(Color::srgb(random_red, random_green, random_blue))),
             Transform::from_xyz(cursor_position.0.x, cursor_position.0.y, 0.0),
-            FlatBody::new(1., FlatBodyType::Dynamic, 2.),
+            FlatBody::new(1., FlatBodyType::Dynamic, 0.5),
             Collider::Circle(CircleParams::new(50.)),
         ));
     } else if buttons.just_pressed(MouseButton::Right) {
@@ -131,24 +131,29 @@ fn spawn_physics_object(
             Mesh2d(meshes.add(Rectangle::new(100.0, 100.))),
             MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
             Transform::from_xyz(cursor_position.0.x, cursor_position.0.y, 0.0),
-            FlatBody::new(1., FlatBodyType::Dynamic, 2.),
+            FlatBody::new(1., FlatBodyType::Dynamic, 0.5),
             Collider::Box(BoxParams::new(100., 100.)),
         ));
     }
 }
 
 fn move_physics_objects(
-    time: Res<Time>,
+    fixed_time: Res<Time<Fixed>>,
     mut query: Query<(Entity, &mut Transform, &mut FlatBody)>,
+    flat_world: Res<FlatWorld>,
 ) {
-    let delta_time = time.delta_secs();
+    let delta_time = fixed_time.delta_secs();
     for (_entity, mut transform, mut flat_body) in query.iter_mut() {
+        if let FlatBodyType::Static = flat_body.body_type {
+            continue;
+        }
         // Update linear velocity using F = m * a -> a = F / m, integrated over delta_time
-        let mass = *flat_body.mass();
-        let acceleration = flat_body.force / mass;
-        flat_body.linear_velocity += acceleration * delta_time;
+        // let mass = *flat_body.mass();
+        // let acceleration = flat_body.force / mass;
+        // flat_body.linear_velocity += acceleration * delta_time;
 
         // Integrate position using velocity * dt
+        flat_body.linear_velocity += flat_world.gravity * delta_time;
         transform.translation.x += flat_body.linear_velocity.x * delta_time;
         transform.translation.y += flat_body.linear_velocity.y * delta_time;
 

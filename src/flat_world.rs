@@ -11,7 +11,7 @@ use bevy::prelude::*;
 
 #[derive(Resource)]
 pub struct FlatWorld {
-    pub force_magnitude: f32,
+    pub gravity: Vec2,
 }
 
 pub fn resolve_collision(
@@ -50,7 +50,12 @@ pub fn collide(
         if let Collider::Box(box_params_b) = collider_b {
             let vertices_a = get_global_vertices(&pos_a, &box_params_a.verticies);
             let vertices_b = get_global_vertices(&pos_b, &box_params_b.verticies);
-            return intersects_polygons(&vertices_a, &vertices_b);
+            return intersects_polygons(
+                &vertices_a,
+                &to_vec2(&pos_a.translation),
+                &vertices_b,
+                &to_vec2(&pos_b.translation),
+            );
         } else if let Collider::Circle(circle_params_b) = collider_b {
             let vertices_a = get_global_vertices(&pos_a, &box_params_a.verticies);
 
@@ -58,6 +63,7 @@ pub fn collide(
                 &to_vec2(&pos_b.translation),
                 circle_params_b.radius,
                 &vertices_a,
+                &to_vec2(&pos_a.translation),
             );
 
             if let Some(coll) = &mut collision {
@@ -73,6 +79,7 @@ pub fn collide(
                 &to_vec2(&pos_a.translation),
                 circle_params_a.radius,
                 &vertices_a,
+                &to_vec2(&pos_b.translation),
             );
         } else if let Collider::Circle(circle_params_b) = collider_b {
             return intersect_circle_circle(

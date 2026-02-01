@@ -63,6 +63,7 @@ pub fn intersect_circle_polygon(
     circle_center: &Vec2,
     circle_radius: f32,
     vertices: &[Vec2; 4],
+    polygon_center: &Vec2,
 ) -> Option<CollisionDetails> {
     let mut normal = Vec2::ZERO;
     let mut depth = f32::MAX;
@@ -106,8 +107,6 @@ pub fn intersect_circle_polygon(
         normal = axis;
     }
 
-    let polygon_center = find_vertices_center(vertices);
-
     let direction = polygon_center - circle_center;
 
     if direction.dot(normal) < 0. {
@@ -145,7 +144,9 @@ pub fn intersect_circle_circle(
 
 pub fn intersects_polygons(
     vertices_a: &[Vec2; 4],
+    center_a: &Vec2,
     vertices_b: &[Vec2; 4],
+    center_b: &Vec2,
 ) -> Option<CollisionDetails> {
     let mut normal = Vec2::ZERO;
     let mut depth = f32::MAX;
@@ -188,9 +189,6 @@ pub fn intersects_polygons(
             normal = axis;
         }
     }
-
-    let center_a = find_vertices_center(vertices_a);
-    let center_b = find_vertices_center(vertices_b);
 
     let direction = center_b - center_a;
 
