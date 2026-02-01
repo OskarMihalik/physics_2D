@@ -19,18 +19,24 @@ pub fn resolve_collision(
     body_b: &FlatBody,
     normal: &Vec2,
     depth: f32,
-) -> (Vec2, Vec2) {
+) -> Option<(Vec2, Vec2)> {
     let relative_velocity = body_b.linear_velocity - body_a.linear_velocity;
+
+    if relative_velocity.dot(*normal) > 0. {
+        return None;
+    }
+
     let e = body_a.restitution.min(body_b.restitution);
 
     let mut j = -(1. + e) * relative_velocity.dot(*normal);
 
-    j /= (1. / body_a.mass) + (1. / body_b.mass);
+    j /= body_a.inv_mass() + body_b.inv_mass();
 
-    let a = -(j / body_a.mass * normal);
-    let b = j / body_b.mass * normal;
+    let impulse = j * normal;
+    let impulse_a = -impulse * body_a.inv_mass();
+    let impulse_b = impulse * body_b.inv_mass();
 
-    return (a, b);
+    return Some((impulse_a, impulse_b));
 }
 
 pub fn collide(

@@ -1,5 +1,4 @@
 use core::f32;
-use std::i16::MAX;
 
 use bevy::{
     ecs::component::Component,

@@ -5,32 +5,48 @@ use crate::{
     helpers::to_vec3,
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub enum FlatBodyType {
     Static,
     #[default]
     Dynamic,
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Debug)]
 pub struct FlatBody {
     pub linear_velocity: Vec2,
-    pub rotation: f32,
     pub rotational_velocity: f32,
     pub force: Vec2,
     pub restitution: f32,
-    pub mass: f32,
+    mass: f32,
+    inv_mass: f32,
     pub body_type: FlatBodyType,
 }
 
 impl FlatBody {
-    pub fn new(density: f32) -> Self {
+    pub fn new(mass: f32, body_type: FlatBodyType, restitution: f32) -> Self {
         let mut params = FlatBody {
-            // density,
+            mass,
+            body_type,
+            restitution,
             ..Default::default()
         };
+        // Setup inverse mass and restitution depending on body type.
+        if let FlatBodyType::Static = params.body_type {
+            params.inv_mass = 0.;
+            // static bodies shouldn't bounce
+        } else {
+            params.inv_mass = 1. / params.mass;
+        }
         // params.mass = params.density * params.area;
         params
+    }
+    pub fn mass(&self) -> &f32 {
+        &self.mass
+    }
+
+    pub fn inv_mass(&self) -> &f32 {
+        &self.inv_mass
     }
 }
 
