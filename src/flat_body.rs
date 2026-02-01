@@ -144,3 +144,26 @@ pub fn on_rotate_flat_body(
         _ => {}
     }
 }
+
+pub fn handle_physics_step(
+    transform: &mut Transform,
+    flat_body: &mut FlatBody,
+    gravity: &Vec2,
+    delta_time: f32,
+) {
+    flat_body.linear_velocity += gravity * delta_time;
+    transform.translation.x += flat_body.linear_velocity.x * delta_time;
+    transform.translation.y += flat_body.linear_velocity.y * delta_time;
+
+    let rotation_radians = flat_body.rotational_velocity.to_radians();
+    let current_rotation = transform.rotation.to_euler(EulerRot::XYZ).2;
+    transform.rotation = Quat::from_euler(
+        EulerRot::XYZ,
+        0.0,
+        0.0,
+        current_rotation + rotation_radians * delta_time,
+    );
+
+    // Clear applied forces for next step
+    flat_body.force = Vec2::ZERO;
+}

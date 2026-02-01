@@ -1,12 +1,19 @@
 use core::f32;
 
+use crate::{
+    flat_body::{
+        BoxParams, CircleParams, FlatBody, FlatBodyType, on_move_flat_body, on_rotate_flat_body,
+    },
+    flat_world::{FlatWorld, collide, resolve_collision},
+    helpers::to_vec3,
+    mouse_position::{MousePositionPlugin, MyWorldCoords},
+};
+use bevy::prelude::*;
 use bevy::{
     ecs::component::Component,
     math::{Vec2, Vec3},
     ui::ValNum,
 };
-
-use crate::flat_body::{BoxParams, CircleParams};
 
 #[derive(Component)]
 pub enum Collider {
@@ -230,4 +237,41 @@ fn project_vertices(vertices: &[Vec2; 4], axis: &Vec2) -> (f32, f32) {
         }
     }
     return (min, max);
+}
+
+pub fn handle_collision_response(
+    transform_a: &mut Transform,
+    transform_b: &mut Transform,
+    flat_body_a: &mut FlatBody,
+    flat_body_b: &mut FlatBody,
+    collision_info: &crate::collisions::CollisionDetails,
+) -> bool {
+    if let FlatBodyType::Static = flat_body_a.body_type {
+        transform_b.translation +=
+            to_vec3(&(collision_info.collision_normal * collision_info.penetration_depth));
+    } else if let FlatBodyType::Static = flat_body_b.body_type {
+        transform_a.translation +=
+            to_vec3(&(-collision_info.collision_normal * collision_info.penetration_depth));
+    } else {
+        transform_a.translation +=
+            to_vec3(&(-collision_info.collision_normal * collision_info.penetration_depth / 2.));
+
+        transform_b.translation +=
+            to_vec3(&(collision_info.collision_normal * collision_info.penetration_depth / 2.));
+    }
+
+    let (impulse_a, impulse_b) = match resolve_collision(
+        &flat_body_a,
+        &flat_body_b,
+        &collision_info.collision_normal,
+        collision_info.penetration_depth,
+    ) {
+        Some((impulse_a, impulse_b)) => (impulse_a, impulse_b),
+        None => return false,
+    };
+
+    flat_body_a.linear_velocity += impulse_a;
+    flat_body_b.linear_velocity += impulse_b;
+
+    true
 }

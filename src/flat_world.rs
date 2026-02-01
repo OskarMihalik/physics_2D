@@ -12,6 +12,7 @@ use bevy::prelude::*;
 #[derive(Resource)]
 pub struct FlatWorld {
     pub gravity: Vec2,
+    pub iterations: u32,
 }
 
 pub fn resolve_collision(
