@@ -7,6 +7,8 @@ use bevy::{
     prelude::*,
 };
 
+const MIN_TRESHOLD_DISTANCE: f32 = 0.0005;
+
 pub fn to_vec2(vec3: &Vec3) -> Vec2 {
     Vec2::new(vec3.x, vec3.y)
 }
@@ -28,4 +30,12 @@ pub fn get_global_vertices(transform: &Transform, verticies: &[Vec2; 4]) -> [Vec
     }
 
     return new_verticies;
+}
+
+pub fn nearly_equal(a: f32, b: f32) -> bool {
+    return (a - b).abs() < MIN_TRESHOLD_DISTANCE;
+}
+
+pub fn nearly_equal_vec(a: &Vec2, b: &Vec2) -> bool {
+    return nearly_equal(a.x, b.x) && nearly_equal(a.y, b.y);
 }

@@ -1,6 +1,6 @@
 use core::f32;
 
-use crate::helpers::get_global_vertices;
+use crate::helpers::{get_global_vertices, nearly_equal, nearly_equal_vec};
 use crate::{
     flat_body::{
         BoxParams, CircleParams, FlatBody, FlatBodyType, on_move_flat_body, on_rotate_flat_body,
@@ -317,6 +317,64 @@ fn find_contact_point_polygon_circle(
     return ContactPoints::One(cp);
 }
 
+fn find_contact_points_polygon_polygon(
+    vertices_a: &[Vec2; 4],
+    vertices_b: &[Vec2; 4],
+) -> ContactPoints {
+    let mut contact1 = Vec2::ZERO;
+    let mut contact2 = Vec2::ZERO;
+    let mut min_dist_sq = f32::MAX;
+    let mut contact_count = 0;
+
+    for i in 0..vertices_a.len() {
+        let p = vertices_a[i];
+        for j in 0..vertices_b.len() {
+            let va = vertices_b[j];
+            let vb = vertices_b[(j + 1) % vertices_b.len()];
+
+            let (distance_squared, contact_point) = point_segment_distance(&p, &va, &vb);
+
+            if nearly_equal(distance_squared, min_dist_sq) {
+                if !nearly_equal_vec(&contact_point, &contact1) {
+                    contact2 = contact_point.clone();
+                    contact_count = 2;
+                }
+            } else if distance_squared < min_dist_sq {
+                min_dist_sq = distance_squared;
+                contact1 = contact_point;
+                contact_count = 1;
+            }
+        }
+    }
+
+    for i in 0..vertices_b.len() {
+        let p = vertices_b[i];
+        for j in 0..vertices_a.len() {
+            let va = vertices_a[j];
+            let vb = vertices_a[(j + 1) % vertices_b.len()];
+
+            let (distance_squared, contact_point) = point_segment_distance(&p, &va, &vb);
+
+            if nearly_equal(distance_squared, min_dist_sq) {
+                if !nearly_equal_vec(&contact_point, &contact1) {
+                    contact2 = contact_point.clone();
+                    contact_count = 2;
+                }
+            } else if distance_squared < min_dist_sq {
+                min_dist_sq = distance_squared;
+                contact1 = contact_point;
+                contact_count = 1;
+            }
+        }
+    }
+
+    if contact_count == 2 {
+        return ContactPoints::Two((contact1, contact2));
+    };
+
+    return ContactPoints::One(contact1);
+}
+
 pub enum ContactPoints {
     One(Vec2),
     Two((Vec2, Vec2)),
@@ -330,7 +388,9 @@ pub fn find_contanct_points(
 ) -> ContactPoints {
     match (collider_a, collider_b) {
         (Collider::Box(box_params_a), Collider::Box(box_params_b)) => {
-            ContactPoints::Two((Vec2::ZERO, Vec2::ZERO))
+            let vertices_a = get_global_vertices(&trans_a, &box_params_a.verticies);
+            let vertices_b = get_global_vertices(&trans_b, &box_params_b.verticies);
+            return find_contact_points_polygon_polygon(&vertices_a, &vertices_b);
         }
         (Collider::Box(box_params_a), Collider::Circle(circle_params_b)) => {
             let pos_a = to_vec2(&trans_a.translation);

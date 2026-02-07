@@ -1,4 +1,7 @@
-use std::{collections::HashMap, time::SystemTime};
+use std::{
+    collections::HashMap,
+    time::{Duration, SystemTime},
+};
 
 use bevy::{
     color::palettes::css::LIME,
@@ -34,6 +37,9 @@ fn main() {
             iterations: 3,
             ..Default::default()
         })
+        .insert_resource(DiagnosisConfig {
+            timer: Timer::new(Duration::from_secs(1), TimerMode::Repeating),
+        })
         .add_systems(Startup, (setup, spawn_text_in_ui).chain())
         .add_systems(Update, (spawn_physics_object, movement, diagnosis_ui))
         .add_systems(FixedUpdate, (world_step).chain())
@@ -42,12 +48,18 @@ fn main() {
         .run();
 }
 
+#[derive(Resource)]
+struct DiagnosisConfig {
+    /// How often to update ui?
+    timer: Timer,
+}
+
 #[derive(Component)]
 struct BodyCountText {}
 #[derive(Component)]
 struct StepTimeText {}
 
-fn spawn_text_in_ui(mut commands: Commands, assets: Res<AssetServer>) {
+fn spawn_text_in_ui(mut commands: Commands) {
     commands
         .spawn((
             Node {
@@ -72,17 +84,23 @@ fn spawn_text_in_ui(mut commands: Commands, assets: Res<AssetServer>) {
 }
 
 fn diagnosis_ui(
-    mut body_count_query: Query<(&mut TextSpan), (With<BodyCountText>, Without<StepTimeText>)>,
-    mut step_time_query: Query<(&mut TextSpan), (With<StepTimeText>, Without<BodyCountText>)>,
+    mut body_count_query: Query<&mut TextSpan, (With<BodyCountText>, Without<StepTimeText>)>,
+    mut step_time_query: Query<&mut TextSpan, (With<StepTimeText>, Without<BodyCountText>)>,
+    time: Res<Time>,
+    mut diagnosis_config: ResMut<DiagnosisConfig>,
     flat_world: Res<FlatWorld>,
 ) {
-    for mut span in &mut body_count_query {
-        // Update the value of the second section
-        **span = format!("{}", flat_world.body_count);
-    }
-    for mut span in &mut step_time_query {
-        // Update the value of the second section
-        **span = format!("{}", flat_world.world_step_time_s);
+    diagnosis_config.timer.tick(time.delta());
+
+    if diagnosis_config.timer.just_finished() {
+        for mut span in &mut body_count_query {
+            // Update the value of the second section
+            **span = format!("{}", flat_world.body_count);
+        }
+        for mut span in &mut step_time_query {
+            // Update the value of the second section
+            **span = format!("{}", flat_world.world_step_time_s);
+        }
     }
 }
 
@@ -277,6 +295,24 @@ fn world_step(
                 gizmos.rect(
                     Isometry3d::new(
                         Vec3::new(contact_point.x, contact_point.y, 0.),
+                        Quat::from_rotation_y(0.),
+                    ),
+                    Vec2::splat(10.),
+                    LIME,
+                );
+            }
+            if let ContactPoints::Two((contact_point1, contact_point2)) = contact_points {
+                gizmos.rect(
+                    Isometry3d::new(
+                        Vec3::new(contact_point1.x, contact_point1.y, 0.),
+                        Quat::from_rotation_y(0.),
+                    ),
+                    Vec2::splat(10.),
+                    LIME,
+                );
+                gizmos.rect(
+                    Isometry3d::new(
+                        Vec3::new(contact_point2.x, contact_point2.y, 0.),
                         Quat::from_rotation_y(0.),
                     ),
                     Vec2::splat(10.),
