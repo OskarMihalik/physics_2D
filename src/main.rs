@@ -1,17 +1,23 @@
-use bevy::prelude::*;
+use std::f32::consts::PI;
+
+use bevy::{color::palettes::css::LIME, prelude::*};
 mod flat_body;
 mod mouse_position;
 use flat_body::FlatBody;
 mod collisions;
+mod flat_manifold;
 mod flat_world;
 mod helpers;
 
 use crate::{
-    collisions::{Collider, handle_collision_response},
+    collisions::{
+        Collider, CollisionDetails, ContactPoints, find_contanct_points, handle_collision_step,
+    },
     flat_body::{
         BoxParams, CircleParams, FlatBodyType, handle_physics_step, on_move_flat_body,
         on_rotate_flat_body,
     },
+    flat_manifold::FlatManifold,
     flat_world::{FlatWorld, collide, resolve_collision},
     helpers::to_vec3,
     mouse_position::{MousePositionPlugin, MyWorldCoords},
@@ -142,6 +148,8 @@ fn world_step(
     fixed_time: Res<Time<Fixed>>,
     mut query: Query<(Entity, &mut Transform, &mut FlatBody, &Collider)>,
     flat_world: Res<FlatWorld>,
+    mut collision_entitties: Local<Vec<(Entity, Entity, CollisionDetails, ContactPoints)>>,
+    mut gizmos: Gizmos,
 ) {
     let delta_time_origin = fixed_time.delta_secs();
     for _ in 0..flat_world.iterations {
@@ -161,10 +169,11 @@ fn world_step(
         }
 
         // Collision step
+        collision_entitties.clear();
         let mut combinations = query.iter_combinations_mut();
         while let Some([a1, a2]) = combinations.fetch_next() {
-            let (_entity_a, mut transform_a, mut flat_body_a, collider_a) = a1;
-            let (_entity_b, mut transform_b, mut flat_body_b, collider_b) = a2;
+            let (entity_a, mut transform_a, mut flat_body_a, collider_a) = a1;
+            let (entity_b, mut transform_b, mut flat_body_b, collider_b) = a2;
 
             let collision = collide((&transform_a, collider_a), (&transform_b, collider_b));
 
@@ -175,16 +184,49 @@ fn world_step(
             }
 
             if let Some(collision_info) = collision {
-                if !handle_collision_response(
+                handle_collision_step(
                     &mut transform_a,
                     &mut transform_b,
                     &mut flat_body_a,
                     &mut flat_body_b,
                     &collision_info,
-                ) {
-                    continue;
-                }
+                );
+                let contact_points =
+                    find_contanct_points(&transform_a, collider_a, &transform_b, collider_b);
+                collision_entitties.push((entity_a, entity_b, collision_info, contact_points));
             }
+        }
+        for (entity_a, entity_b, collision_details, contact_points) in &collision_entitties {
+            let [
+                (entity_a, mut transform_a, mut flat_body_a, collider_a),
+                (entity_b, mut transform_b, mut flat_body_b, collider_b),
+            ] = match query.get_many_mut([*entity_a, *entity_b]) {
+                Ok(val) => val,
+                Err(_) => continue,
+            };
+
+            let (impulse_a, impulse_b) = match resolve_collision(
+                &flat_body_a,
+                &flat_body_b,
+                &collision_details.collision_normal,
+                collision_details.penetration_depth,
+            ) {
+                Some((impulse_a, impulse_b)) => (impulse_a, impulse_b),
+                None => continue,
+            };
+            if let ContactPoints::One(contact_point) = contact_points {
+                gizmos.rect(
+                    Isometry3d::new(
+                        Vec3::new(contact_point.x, contact_point.y, 0.),
+                        Quat::from_rotation_y(0.),
+                    ),
+                    Vec2::splat(10.),
+                    LIME,
+                );
+            }
+
+            flat_body_a.linear_velocity += impulse_a;
+            flat_body_b.linear_velocity += impulse_b;
         }
     }
 }
