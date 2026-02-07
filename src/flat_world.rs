@@ -9,10 +9,12 @@ use crate::{
 use bevy::mesh::Mesh2d;
 use bevy::prelude::*;
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct FlatWorld {
     pub gravity: Vec2,
     pub iterations: u32,
+    pub body_count: usize,
+    pub world_step_time_s: u128,
 }
 
 pub fn resolve_collision(

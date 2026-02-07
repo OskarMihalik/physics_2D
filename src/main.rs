@@ -1,6 +1,10 @@
-use std::f32::consts::PI;
+use std::time::SystemTime;
 
-use bevy::{color::palettes::css::LIME, prelude::*};
+use bevy::{
+    color::palettes::css::LIME,
+    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
+    prelude::*,
+};
 mod flat_body;
 mod mouse_position;
 use flat_body::FlatBody;
@@ -17,9 +21,7 @@ use crate::{
         BoxParams, CircleParams, FlatBodyType, handle_physics_step, on_move_flat_body,
         on_rotate_flat_body,
     },
-    flat_manifold::FlatManifold,
     flat_world::{FlatWorld, collide, resolve_collision},
-    helpers::to_vec3,
     mouse_position::{MousePositionPlugin, MyWorldCoords},
 };
 
@@ -30,13 +32,58 @@ fn main() {
         .insert_resource(FlatWorld {
             gravity: Vec2::new(0., -309.81),
             iterations: 3,
+            ..Default::default()
         })
-        .add_systems(Startup, setup)
-        .add_systems(Update, (spawn_physics_object, movement))
+        .add_systems(Startup, (setup, spawn_text_in_ui).chain())
+        .add_systems(Update, (spawn_physics_object, movement, diagnosis_ui))
         .add_systems(FixedUpdate, (world_step).chain())
         .add_observer(on_move_flat_body)
         .add_observer(on_rotate_flat_body)
         .run();
+}
+
+#[derive(Component)]
+struct BodyCountText {}
+#[derive(Component)]
+struct StepTimeText {}
+
+fn spawn_text_in_ui(mut commands: Commands, assets: Res<AssetServer>) {
+    commands
+        .spawn((
+            Node {
+                flex_direction: FlexDirection::Column,
+                position_type: PositionType::Absolute,
+
+                bottom: px(20.0),
+                right: px(5.0),
+                ..default()
+            },
+            TextColor(Color::WHITE),
+            TextLayout::new_with_justify(Justify::Left),
+        ))
+        .with_children(|builder| {
+            builder
+                .spawn((Text::new("Body count: "),))
+                .with_child((TextSpan::default(), BodyCountText {}));
+            builder
+                .spawn((Text::new("step time micros: "),))
+                .with_child((TextSpan::default(), StepTimeText {}));
+        });
+}
+
+fn diagnosis_ui(
+    mut body_count_query: Query<(&mut TextSpan), (With<BodyCountText>, Without<StepTimeText>)>,
+    mut step_time_query: Query<(&mut TextSpan), (With<StepTimeText>, Without<BodyCountText>)>,
+    flat_world: Res<FlatWorld>,
+) {
+    for mut span in &mut body_count_query {
+        // Update the value of the second section
+        **span = format!("{}", flat_world.body_count);
+    }
+    for mut span in &mut step_time_query {
+        // Update the value of the second section
+        **span = format!("{}", flat_world.world_step_time_s);
+    }
 }
 
 #[derive(Component)]
@@ -147,11 +194,15 @@ fn spawn_physics_object(
 fn world_step(
     fixed_time: Res<Time<Fixed>>,
     mut query: Query<(Entity, &mut Transform, &mut FlatBody, &Collider)>,
-    flat_world: Res<FlatWorld>,
+    mut flat_world: ResMut<FlatWorld>,
     mut collision_entitties: Local<Vec<(Entity, Entity, CollisionDetails, ContactPoints)>>,
     mut gizmos: Gizmos,
+    time: Res<Time>,
 ) {
+    let world_step_start = SystemTime::now();
+    flat_world.body_count = query.count();
     let delta_time_origin = fixed_time.delta_secs();
+
     for _ in 0..flat_world.iterations {
         let delta_time = delta_time_origin / (flat_world.iterations as f32);
         // physics step
@@ -196,6 +247,8 @@ fn world_step(
                 collision_entitties.push((entity_a, entity_b, collision_info, contact_points));
             }
         }
+
+        // collision resolve
         for (entity_a, entity_b, collision_details, contact_points) in &collision_entitties {
             let [
                 (entity_a, mut transform_a, mut flat_body_a, collider_a),
@@ -229,4 +282,6 @@ fn world_step(
             flat_body_b.linear_velocity += impulse_b;
         }
     }
+
+    flat_world.world_step_time_s = world_step_start.elapsed().unwrap().as_micros();
 }
