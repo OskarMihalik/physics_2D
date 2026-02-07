@@ -1,5 +1,6 @@
 use core::f32;
 
+use crate::helpers::get_global_vertices;
 use crate::{
     flat_body::{
         BoxParams, CircleParams, FlatBody, FlatBodyType, on_move_flat_body, on_rotate_flat_body,
@@ -262,12 +263,58 @@ pub fn handle_collision_step(
     }
 }
 
-/// .returns contact point
+/// returns contact point
 pub fn find_contanct_point(center_a: &Vec2, radius_a: f32, center_b: &Vec2) -> Vec2 {
     let ab = center_b - center_a;
     let direction = ab.normalize();
     let center_point = center_a + direction * radius_a;
     return center_point;
+}
+
+/// returns distance squared and contact point
+fn point_segment_distance(p: &Vec2, a: &Vec2, b: &Vec2) -> (f32, Vec2) {
+    let ab = b - a;
+    let ap = p - a;
+
+    let proj = ap.dot(ab);
+    let ab_len_sq = ab.length_squared();
+    let d = proj / ab_len_sq;
+
+    let mut contact_point = Vec2::ZERO;
+    if d <= 0. {
+        contact_point = a.clone();
+    } else if d >= 1. {
+        contact_point = b.clone();
+    } else {
+        contact_point = a + ab * d;
+    }
+
+    let distance_squared = p.distance_squared(contact_point);
+
+    return (distance_squared, contact_point);
+}
+
+fn find_contact_point_polygon_circle(
+    circle_center: &Vec2,
+    circle_radius: f32,
+    polygon_center: &Vec2,
+    polygon_vertices: &[Vec2; 4],
+) -> ContactPoints {
+    let mut cp = Vec2::ZERO;
+    let mut min_distance_squared = f32::MAX;
+
+    for i in 0..polygon_vertices.len() {
+        let va = polygon_vertices[i];
+        let vb = polygon_vertices[(i + 1) % polygon_vertices.len()];
+
+        let (distance_squared, contact) = point_segment_distance(circle_center, &va, &vb);
+
+        if distance_squared < min_distance_squared {
+            min_distance_squared = distance_squared;
+            cp = contact.clone();
+        }
+    }
+    return ContactPoints::One(cp);
 }
 
 pub enum ContactPoints {
@@ -286,12 +333,26 @@ pub fn find_contanct_points(
             ContactPoints::Two((Vec2::ZERO, Vec2::ZERO))
         }
         (Collider::Box(box_params_a), Collider::Circle(circle_params_b)) => {
-            ContactPoints::One(Vec2::ZERO)
+            let pos_a = to_vec2(&trans_a.translation);
+            let vertices_a = get_global_vertices(&trans_a, &box_params_a.verticies);
+            return find_contact_point_polygon_circle(
+                &to_vec2(&trans_b.translation),
+                circle_params_b.radius,
+                &pos_a,
+                &vertices_a,
+            );
         }
         (Collider::Circle(circle_params_a), Collider::Box(box_params_b)) => {
-            ContactPoints::One(Vec2::ZERO)
+            let pos_b = to_vec2(&trans_b.translation);
+            let vertices_b = get_global_vertices(&trans_b, &box_params_b.verticies);
+            return find_contact_point_polygon_circle(
+                &to_vec2(&trans_a.translation),
+                circle_params_a.radius,
+                &pos_b,
+                &vertices_b,
+            );
         }
-        (Collider::Circle(circle_params_a), Collider::Circle(circle_params_b)) => {
+        (Collider::Circle(circle_params_a), Collider::Circle(_circle_params_b)) => {
             let contact_point = find_contanct_point(
                 &to_vec2(&trans_a.translation),
                 circle_params_a.radius,

@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use std::{collections::HashMap, time::SystemTime};
 
 use bevy::{
     color::palettes::css::LIME,
@@ -195,9 +195,10 @@ fn world_step(
     fixed_time: Res<Time<Fixed>>,
     mut query: Query<(Entity, &mut Transform, &mut FlatBody, &Collider)>,
     mut flat_world: ResMut<FlatWorld>,
-    mut collision_entitties: Local<Vec<(Entity, Entity, CollisionDetails, ContactPoints)>>,
+    mut collision_entitties: Local<
+        HashMap<String, (Entity, Entity, CollisionDetails, ContactPoints)>,
+    >,
     mut gizmos: Gizmos,
-    time: Res<Time>,
 ) {
     let world_step_start = SystemTime::now();
     flat_world.body_count = query.count();
@@ -244,12 +245,17 @@ fn world_step(
                 );
                 let contact_points =
                     find_contanct_points(&transform_a, collider_a, &transform_b, collider_b);
-                collision_entitties.push((entity_a, entity_b, collision_info, contact_points));
+                collision_entitties.insert(
+                    format!("{}-{}", entity_a, entity_b),
+                    (entity_a, entity_b, collision_info, contact_points),
+                );
             }
         }
 
         // collision resolve
-        for (entity_a, entity_b, collision_details, contact_points) in &collision_entitties {
+        for (_id, (entity_a, entity_b, collision_details, contact_points)) in
+            collision_entitties.iter()
+        {
             let [
                 (entity_a, mut transform_a, mut flat_body_a, collider_a),
                 (entity_b, mut transform_b, mut flat_body_b, collider_b),
