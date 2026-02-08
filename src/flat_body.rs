@@ -1,9 +1,6 @@
-use bevy::{ecs::entity, prelude::*, reflect::Tuple};
+use bevy::prelude::*;
 
-use crate::{
-    collisions::{Collider, compute_area},
-    helpers::to_vec3,
-};
+use crate::{collisions::Collider, helpers::to_vec3};
 
 #[derive(Default, Debug)]
 pub enum FlatBodyType {
@@ -16,7 +13,7 @@ pub enum FlatBodyType {
 #[require(Collider)]
 pub struct FlatBody {
     pub linear_velocity: Vec2,
-    pub rotational_velocity: f32,
+    pub angular_velocity: f32,
     pub force: Vec2,
     pub restitution: f32,
     mass: f32,
@@ -124,14 +121,6 @@ impl BoxParams {
             area,
         }
     }
-
-    // pub fn get_transformed_vertices(self, rotation)-> (Vec2, Vec2, Vec2, Vec2) {
-    //     let mut transformed_verticies = self.verticies.clone();
-    //     for vertex in self.verticies.iter().enumerate() {
-    //         transformed_verticies[vertex.0].
-    //     }
-    //     return vertices
-    // }
 }
 
 pub fn calculate_rotational_inertia(collider: &Collider, flat_body: &FlatBody) -> f32 {
@@ -200,7 +189,7 @@ pub fn handle_physics_step(
     transform.translation.x += flat_body.linear_velocity.x * delta_time;
     transform.translation.y += flat_body.linear_velocity.y * delta_time;
 
-    let rotation_radians = flat_body.rotational_velocity.to_radians();
+    let rotation_radians = flat_body.angular_velocity.to_radians();
     let current_rotation = transform.rotation.to_euler(EulerRot::XYZ).2;
     transform.rotation = Quat::from_euler(
         EulerRot::XYZ,

@@ -1,11 +1,4 @@
-use bevy::{
-    math::{
-        VectorSpace,
-        ops::{cos, sin},
-    },
-    mesh::VertexAttributeValues,
-    prelude::*,
-};
+use bevy::prelude::*;
 
 const MIN_TRESHOLD_DISTANCE: f32 = 0.0005;
 
@@ -37,5 +30,5 @@ pub fn nearly_equal(a: f32, b: f32) -> bool {
 }
 
 pub fn nearly_equal_vec(a: &Vec2, b: &Vec2) -> bool {
-    return nearly_equal(a.x, b.x) && nearly_equal(a.y, b.y);
+    return a.distance_squared(*b) < MIN_TRESHOLD_DISTANCE.sqrt();
 }

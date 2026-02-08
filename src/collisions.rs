@@ -2,20 +2,11 @@ use core::f32;
 
 use crate::helpers::{get_global_vertices, nearly_equal, nearly_equal_vec};
 use crate::{
-    flat_body::{
-        BoxParams, CircleParams, FlatBody, FlatBodyType, on_move_flat_body, on_rotate_flat_body,
-    },
-    flat_manifold::FlatManifold,
-    flat_world::{FlatWorld, collide, resolve_collision},
+    flat_body::{BoxParams, CircleParams, FlatBody, FlatBodyType},
     helpers::{to_vec2, to_vec3},
-    mouse_position::{MousePositionPlugin, MyWorldCoords},
 };
-use bevy::{
-    ecs::component::Component,
-    math::{Vec2, Vec3},
-    ui::ValNum,
-};
-use bevy::{math::VectorSpace, prelude::*};
+use bevy::prelude::*;
+use bevy::{ecs::component::Component, math::Vec2};
 
 #[derive(Component)]
 pub enum Collider {
@@ -32,13 +23,6 @@ impl Default for Collider {
             verticies: [Vec2::ZERO, Vec2::ZERO, Vec2::ZERO, Vec2::ZERO],
         })
     }
-}
-
-pub fn compute_area(collider: &Collider) -> f32 {
-    return match collider {
-        Collider::Circle(radius) => std::f32::consts::PI * radius.radius * radius.radius,
-        Collider::Box(box_params) => box_params.width * box_params.height,
-    };
 }
 
 pub struct CollisionDetails {
@@ -222,20 +206,6 @@ pub fn intersects_polygons(
     });
 }
 
-fn find_vertices_center(vertices: &[Vec2; 4]) -> Vec2 {
-    let mut sum_x = 0.;
-    let mut sum_y = 0.;
-
-    for vertex in vertices {
-        sum_x += vertex.x;
-        sum_y += vertex.y;
-    }
-    return Vec2::new(
-        sum_x / vertices.len().val_num_f32(),
-        sum_y / vertices.len().val_num_f32(),
-    );
-}
-
 fn project_vertices(vertices: &[Vec2; 4], axis: &Vec2) -> (f32, f32) {
     let mut max = f32::MIN;
     let mut min = f32::MAX;
@@ -252,11 +222,11 @@ fn project_vertices(vertices: &[Vec2; 4], axis: &Vec2) -> (f32, f32) {
     return (min, max);
 }
 
-pub fn handle_collision_step(
+pub fn separate_bodies(
     transform_a: &mut Transform,
     transform_b: &mut Transform,
-    flat_body_a: &mut FlatBody,
-    flat_body_b: &mut FlatBody,
+    flat_body_a: &FlatBody,
+    flat_body_b: &FlatBody,
     collision_info: &crate::collisions::CollisionDetails,
 ) {
     if let FlatBodyType::Static = flat_body_a.body_type {

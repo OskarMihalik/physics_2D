@@ -3,11 +3,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use bevy::{
-    color::palettes::css::LIME,
-    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
-    prelude::*,
-};
+use bevy::{color::palettes::css::LIME, prelude::*};
 mod flat_body;
 mod mouse_position;
 use flat_body::FlatBody;
@@ -18,7 +14,7 @@ mod helpers;
 
 use crate::{
     collisions::{
-        Collider, CollisionDetails, ContactPoints, find_contanct_points, handle_collision_step,
+        Collider, CollisionDetails, ContactPoints, find_contanct_points, separate_bodies,
     },
     flat_body::{
         BoxParams, CircleParams, FlatBodyType, handle_physics_step, on_flat_body_added,
@@ -41,7 +37,7 @@ fn main() {
             timer: Timer::new(Duration::from_secs(1), TimerMode::Repeating),
         })
         .add_systems(Startup, (setup, spawn_text_in_ui).chain())
-        .add_systems(Update, (spawn_physics_object, movement, diagnosis_ui))
+        .add_systems(Update, (spawn_physics_object, diagnosis_ui))
         .add_systems(FixedUpdate, (world_step).chain())
         .add_observer(on_move_flat_body)
         .add_observer(on_rotate_flat_body)
@@ -105,9 +101,6 @@ fn diagnosis_ui(
     }
 }
 
-#[derive(Component)]
-struct UserMovable {}
-
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -161,34 +154,6 @@ fn setup(
     // ));
 }
 
-fn movement(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut controllable_flat_bodies_query: Query<(Entity, &mut FlatBody), With<UserMovable>>,
-) {
-    // Treat `speed` as a force magnitude (units: force per second). We
-    // accumulate directional input into a force vector here. The actual
-    // acceleration is applied in the fixed-step integrator using delta time.
-    let speed = 40.;
-    for (_entity, mut flat_body) in &mut controllable_flat_bodies_query {
-        let mut force = Vec2::ZERO;
-        if keyboard_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {
-            force += Vec2::Y;
-        }
-        if keyboard_input.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]) {
-            force += -Vec2::Y;
-        }
-        if keyboard_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) {
-            force += -Vec2::X;
-        }
-        if keyboard_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) {
-            force += Vec2::X;
-        }
-
-        // Set force for the physics integrator (force per second).
-        flat_body.force = force.normalize_or_zero() * speed;
-    }
-}
-
 fn spawn_physics_object(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -224,16 +189,14 @@ fn world_step(
     fixed_time: Res<Time<Fixed>>,
     mut query: Query<(Entity, &mut Transform, &mut FlatBody, &Collider)>,
     mut flat_world: ResMut<FlatWorld>,
-    mut collision_entitties: Local<
-        HashMap<String, (Entity, Entity, CollisionDetails, ContactPoints)>,
-    >,
+    mut collision_entitties: Local<Vec<(Entity, Entity, CollisionDetails, ContactPoints)>>,
     mut gizmos: Gizmos,
 ) {
     let world_step_start = SystemTime::now();
     flat_world.body_count = query.count();
     let delta_time_origin = fixed_time.delta_secs();
 
-    for _ in 0..flat_world.iterations {
+    for iteration in 0..flat_world.iterations {
         let delta_time = delta_time_origin / (flat_world.iterations as f32);
         // physics step
         for (_entity, mut transform, mut flat_body, _) in query.iter_mut() {
@@ -253,8 +216,8 @@ fn world_step(
         collision_entitties.clear();
         let mut combinations = query.iter_combinations_mut();
         while let Some([a1, a2]) = combinations.fetch_next() {
-            let (entity_a, mut transform_a, mut flat_body_a, collider_a) = a1;
-            let (entity_b, mut transform_b, mut flat_body_b, collider_b) = a2;
+            let (entity_a, mut transform_a, flat_body_a, collider_a) = a1;
+            let (entity_b, mut transform_b, flat_body_b, collider_b) = a2;
 
             let collision = collide((&transform_a, collider_a), (&transform_b, collider_b));
 
@@ -265,75 +228,72 @@ fn world_step(
             }
 
             if let Some(collision_info) = collision {
-                handle_collision_step(
+                separate_bodies(
                     &mut transform_a,
                     &mut transform_b,
-                    &mut flat_body_a,
-                    &mut flat_body_b,
+                    &flat_body_a,
+                    &flat_body_b,
                     &collision_info,
                 );
-                let contact_points =
-                    find_contanct_points(&transform_a, collider_a, &transform_b, collider_b);
-                collision_entitties.insert(
-                    format!("{}-{}", entity_a, entity_b),
-                    (entity_a, entity_b, collision_info, contact_points),
-                );
+                if iteration == flat_world.iterations - 1 {
+                    let contact_points =
+                        find_contanct_points(&transform_a, collider_a, &transform_b, collider_b);
+                    collision_entitties.push((entity_a, entity_b, collision_info, contact_points));
+                }
             }
         }
+    }
 
-        // collision resolve
-        for (_id, (entity_a, entity_b, collision_details, contact_points)) in
-            collision_entitties.iter()
-        {
-            let [
-                (entity_a, mut transform_a, mut flat_body_a, collider_a),
-                (entity_b, mut transform_b, mut flat_body_b, collider_b),
-            ] = match query.get_many_mut([*entity_a, *entity_b]) {
-                Ok(val) => val,
-                Err(_) => continue,
-            };
+    // collision resolve
+    for (entity_a, entity_b, collision_details, contact_points) in collision_entitties.iter() {
+        let [
+            (entity_a, mut transform_a, mut flat_body_a, collider_a),
+            (entity_b, mut transform_b, mut flat_body_b, collider_b),
+        ] = match query.get_many_mut([*entity_a, *entity_b]) {
+            Ok(val) => val,
+            Err(_) => continue,
+        };
 
-            let (impulse_a, impulse_b) = match resolve_collision(
-                &flat_body_a,
-                &flat_body_b,
-                &collision_details.collision_normal,
-                collision_details.penetration_depth,
-            ) {
-                Some((impulse_a, impulse_b)) => (impulse_a, impulse_b),
-                None => continue,
-            };
-            if let ContactPoints::One(contact_point) = contact_points {
-                gizmos.rect(
-                    Isometry3d::new(
-                        Vec3::new(contact_point.x, contact_point.y, 0.),
-                        Quat::from_rotation_y(0.),
-                    ),
-                    Vec2::splat(10.),
-                    LIME,
-                );
-            }
-            if let ContactPoints::Two((contact_point1, contact_point2)) = contact_points {
-                gizmos.rect(
-                    Isometry3d::new(
-                        Vec3::new(contact_point1.x, contact_point1.y, 0.),
-                        Quat::from_rotation_y(0.),
-                    ),
-                    Vec2::splat(10.),
-                    LIME,
-                );
-                gizmos.rect(
-                    Isometry3d::new(
-                        Vec3::new(contact_point2.x, contact_point2.y, 0.),
-                        Quat::from_rotation_y(0.),
-                    ),
-                    Vec2::splat(10.),
-                    LIME,
-                );
-            }
-
-            flat_body_a.linear_velocity += impulse_a;
-            flat_body_b.linear_velocity += impulse_b;
+        let (impulse_a, impulse_b) = match resolve_collision(
+            &flat_body_a,
+            &flat_body_b,
+            &collision_details.collision_normal,
+            collision_details.penetration_depth,
+        ) {
+            Some((impulse_a, impulse_b)) => (impulse_a, impulse_b),
+            None => continue,
+        };
+        if let ContactPoints::One(contact_point) = contact_points {
+            gizmos.rect(
+                Isometry3d::new(
+                    Vec3::new(contact_point.x, contact_point.y, 0.),
+                    Quat::from_rotation_y(0.),
+                ),
+                Vec2::splat(10.),
+                LIME,
+            );
         }
+        if let ContactPoints::Two((contact_point1, contact_point2)) = contact_points {
+            gizmos.rect(
+                Isometry3d::new(
+                    Vec3::new(contact_point1.x, contact_point1.y, 0.),
+                    Quat::from_rotation_y(0.),
+                ),
+                Vec2::splat(10.),
+                LIME,
+            );
+            gizmos.rect(
+                Isometry3d::new(
+                    Vec3::new(contact_point2.x, contact_point2.y, 0.),
+                    Quat::from_rotation_y(0.),
+                ),
+                Vec2::splat(10.),
+                LIME,
+            );
+        }
+
+        flat_body_a.linear_velocity += impulse_a;
+        flat_body_b.linear_velocity += impulse_b;
     }
 
     flat_world.world_step_time_s = world_step_start.elapsed().unwrap().as_micros();

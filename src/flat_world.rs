@@ -7,7 +7,6 @@ use crate::{
     helpers::{get_global_vertices, to_vec2},
 };
 use bevy::prelude::*;
-use bevy::{color::palettes::css::RED, mesh::Mesh2d};
 
 #[derive(Resource, Default)]
 pub struct FlatWorld {
