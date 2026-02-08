@@ -1,4 +1,4 @@
-use bevy::{prelude::*, reflect::Tuple};
+use bevy::{ecs::entity, prelude::*, reflect::Tuple};
 
 use crate::{
     collisions::{Collider, compute_area},
@@ -13,6 +13,7 @@ pub enum FlatBodyType {
 }
 
 #[derive(Component, Default, Debug)]
+#[require(Collider)]
 pub struct FlatBody {
     pub linear_velocity: Vec2,
     pub rotational_velocity: f32,
@@ -20,6 +21,8 @@ pub struct FlatBody {
     pub restitution: f32,
     mass: f32,
     inv_mass: f32,
+    inertia: f32,
+    inv_inertia: f32,
     pub body_type: FlatBodyType,
 }
 
@@ -34,7 +37,6 @@ impl FlatBody {
         // Setup inverse mass and restitution depending on body type.
         if let FlatBodyType::Static = params.body_type {
             params.inv_mass = 0.;
-            // static bodies shouldn't bounce
         } else {
             params.inv_mass = 1. / params.mass;
         }
@@ -48,8 +50,37 @@ impl FlatBody {
     pub fn inv_mass(&self) -> &f32 {
         &self.inv_mass
     }
+
+    fn update_inertia(&mut self, collider: &Collider) {
+        let inertia = calculate_rotational_inertia(collider, &self);
+        if let FlatBodyType::Static = self.body_type {
+            self.inertia = 0.;
+            self.inv_inertia = 0.;
+        } else {
+            self.inertia = inertia;
+            self.inv_inertia = 1. / inertia;
+        }
+    }
+
+    pub fn inertia(&self) -> f32 {
+        self.inertia
+    }
+
+    pub fn inf_inertia(&self) -> f32 {
+        self.inv_inertia
+    }
 }
 
+pub fn on_flat_body_added(
+    event: On<Add, (FlatBody, Collider)>,
+    mut query: Query<(&mut FlatBody, &Collider)>,
+) {
+    let (mut flat_body, collider) = match query.get_mut(event.entity) {
+        Ok(ok) => ok,
+        Err(_) => return,
+    };
+    flat_body.update_inertia(collider);
+}
 pub struct CircleParams {
     pub radius: f32,
     pub area: f32,
@@ -62,6 +93,7 @@ impl CircleParams {
     }
 }
 
+#[derive(Default)]
 pub struct BoxParams {
     pub width: f32,
     pub height: f32,
@@ -100,6 +132,19 @@ impl BoxParams {
     //     }
     //     return vertices
     // }
+}
+
+pub fn calculate_rotational_inertia(collider: &Collider, flat_body: &FlatBody) -> f32 {
+    match collider {
+        Collider::Box(box_params) => {
+            return (1. / 12.)
+                * flat_body.mass
+                * (box_params.width.sqrt() + box_params.height.sqrt());
+        }
+        Collider::Circle(circle_params) => {
+            return (1. / 2.) * flat_body.mass * circle_params.radius.sqrt();
+        }
+    }
 }
 
 #[derive(Event)]

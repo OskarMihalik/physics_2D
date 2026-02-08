@@ -21,8 +21,8 @@ use crate::{
         Collider, CollisionDetails, ContactPoints, find_contanct_points, handle_collision_step,
     },
     flat_body::{
-        BoxParams, CircleParams, FlatBodyType, handle_physics_step, on_move_flat_body,
-        on_rotate_flat_body,
+        BoxParams, CircleParams, FlatBodyType, handle_physics_step, on_flat_body_added,
+        on_move_flat_body, on_rotate_flat_body,
     },
     flat_world::{FlatWorld, collide, resolve_collision},
     mouse_position::{MousePositionPlugin, MyWorldCoords},
@@ -45,6 +45,7 @@ fn main() {
         .add_systems(FixedUpdate, (world_step).chain())
         .add_observer(on_move_flat_body)
         .add_observer(on_rotate_flat_body)
+        .add_observer(on_flat_body_added)
         .run();
 }
 
@@ -117,29 +118,38 @@ fn setup(
     // Ceiling
     commands.spawn((
         // square_sprite.clone(),
+        Mesh2d(meshes.add(Rectangle::new(400.0, 30.))),
+        MeshMaterial2d(materials.add(Color::srgb(0., 0., 1.))),
+        Transform::from_xyz(50.0 * -7., 50.0 * -3., 0.0).with_rotation(Quat::from_euler(
+            EulerRot::XYZ,
+            0.,
+            0.,
+            -0.3,
+        )),
+        FlatBody::new(1., FlatBodyType::Static, 0.5),
+        Collider::Box(BoxParams::new(400., 30.)),
+    ));
+
+    commands.spawn((
+        // square_sprite.clone(),
+        Mesh2d(meshes.add(Rectangle::new(400.0, 30.))),
+        MeshMaterial2d(materials.add(Color::srgb(0., 0., 1.))),
+        Transform::from_xyz(50.0 * 7., 50.0 * 2.0, 0.0).with_rotation(Quat::from_euler(
+            EulerRot::XYZ,
+            0.,
+            0.,
+            0.3,
+        )),
+        FlatBody::new(1., FlatBodyType::Static, 0.5),
+        Collider::Box(BoxParams::new(400., 30.)),
+    ));
+
+    commands.spawn((
         Mesh2d(meshes.add(Rectangle::new(700.0, 30.))),
         MeshMaterial2d(materials.add(Color::srgb(0., 0., 1.))),
         Transform::from_xyz(0.0, 50.0 * -9.0, 0.0),
         FlatBody::new(1., FlatBodyType::Static, 0.5),
         Collider::Box(BoxParams::new(700., 30.)),
-    ));
-
-    // commands.spawn((
-    //     Mesh2d(meshes.add(Circle::new(50.0))),
-    //     MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
-    //     Transform::from_xyz(0., 0., 0.0),
-    //     FlatBody::Dynamic(FlatBodyParameters::new(1.)),
-    //     Collider::Circle(CircleParams::new(50.)),
-    //     UserMovable {},
-    // ));
-
-    commands.spawn((
-        Mesh2d(meshes.add(Rectangle::new(100.0, 100.))),
-        MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
-        Transform::from_xyz(0., 0., 0.0),
-        FlatBody::new(1., FlatBodyType::Dynamic, 0.5),
-        Collider::Box(BoxParams::new(100., 100.)),
-        UserMovable {},
     ));
 
     // commands.spawn((
@@ -202,7 +212,8 @@ fn spawn_physics_object(
         commands.spawn((
             Mesh2d(meshes.add(Rectangle::new(100.0, 100.))),
             MeshMaterial2d(materials.add(Color::srgb(1., 0., 0.))),
-            Transform::from_xyz(cursor_position.0.x, cursor_position.0.y, 0.0),
+            Transform::from_xyz(cursor_position.0.x, cursor_position.0.y, 0.0)
+                .with_rotation(Quat::from_euler(EulerRot::XYZ, 0., 0., 0.)),
             FlatBody::new(1., FlatBodyType::Dynamic, 0.5),
             Collider::Box(BoxParams::new(100., 100.)),
         ));

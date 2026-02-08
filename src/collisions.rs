@@ -23,6 +23,17 @@ pub enum Collider {
     Circle(CircleParams),
 }
 
+impl Default for Collider {
+    fn default() -> Self {
+        Collider::Box(BoxParams {
+            width: 0.,
+            height: 0.,
+            area: 0.,
+            verticies: [Vec2::ZERO, Vec2::ZERO, Vec2::ZERO, Vec2::ZERO],
+        })
+    }
+}
+
 pub fn compute_area(collider: &Collider) -> f32 {
     return match collider {
         Collider::Circle(radius) => std::f32::consts::PI * radius.radius * radius.radius,
@@ -81,7 +92,7 @@ pub fn intersect_circle_polygon(
         let vb = vertices[(i + 1) % vertices.len()];
 
         let edge = vb - va;
-        let axis = Vec2::new(-edge.x, edge.y).normalize();
+        let axis = Vec2::new(-edge.y, edge.x).normalize();
         let (min_a, max_a) = project_vertices(vertices, &axis);
         let (min_b, max_b) = project_circle(circle_center, circle_radius, &axis);
 
@@ -164,7 +175,7 @@ pub fn intersects_polygons(
         let vb = vertices_a[(i + 1) % vertices_a.len()];
 
         let edge = vb - va;
-        let axis = Vec2::new(-edge.x, edge.y).normalize();
+        let axis = Vec2::new(-edge.y, edge.x).normalize();
         let (min_a, max_a) = project_vertices(vertices_a, &axis);
         let (min_b, max_b) = project_vertices(vertices_b, &axis);
 

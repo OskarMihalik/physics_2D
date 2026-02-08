@@ -6,8 +6,8 @@ use crate::{
     flat_body::FlatBody,
     helpers::{get_global_vertices, to_vec2},
 };
-use bevy::mesh::Mesh2d;
 use bevy::prelude::*;
+use bevy::{color::palettes::css::RED, mesh::Mesh2d};
 
 #[derive(Resource, Default)]
 pub struct FlatWorld {
@@ -53,6 +53,7 @@ pub fn collide(
         if let Collider::Box(box_params_b) = collider_b {
             let vertices_a = get_global_vertices(&pos_a, &box_params_a.verticies);
             let vertices_b = get_global_vertices(&pos_b, &box_params_b.verticies);
+
             return intersects_polygons(
                 &vertices_a,
                 &to_vec2(&pos_a.translation),
