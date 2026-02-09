@@ -1,12 +1,12 @@
 use crate::{
     collisions::{
-        Collider, CollisionDetails, intersect_circle_circle, intersect_circle_polygon,
-        intersects_polygons,
+        Collider, CollisionDetails, ContactPoints, find_contanct_points, intersect_circle_circle,
+        intersect_circle_polygon, intersects_polygons, separate_bodies,
     },
-    flat_body::FlatBody,
+    flat_body::{FlatBody, FlatBodyType},
     helpers::{get_global_vertices, to_vec2},
 };
-use bevy::prelude::*;
+use bevy::{ecs::query::QueryCombinationIter, prelude::*};
 
 #[derive(Resource, Default)]
 pub struct FlatWorld {
@@ -95,4 +95,68 @@ pub fn collide(
     }
 
     return None;
+}
+
+pub fn broad_phase(
+    query: &mut Query<'_, '_, (Entity, &mut Transform, &mut FlatBody, &Collider)>,
+    collision_entitties: &mut Vec<(Entity, Entity, CollisionDetails, ContactPoints)>,
+    iteration: u32,
+    iterations: u32,
+) {
+    let mut combinations = query.iter_combinations_mut();
+    while let Some([a1, a2]) = combinations.fetch_next() {
+        let (entity_a, mut transform_a, flat_body_a, collider_a) = a1;
+        let (entity_b, mut transform_b, flat_body_b, collider_b) = a2;
+
+        let collision = collide((&transform_a, collider_a), (&transform_b, collider_b));
+
+        if let FlatBodyType::Static = flat_body_a.body_type
+            && let FlatBodyType::Static = flat_body_b.body_type
+        {
+            continue;
+        }
+
+        if let Some(collision_info) = collision {
+            separate_bodies(
+                &mut transform_a,
+                &mut transform_b,
+                &flat_body_a,
+                &flat_body_b,
+                &collision_info,
+            );
+            if iteration == iterations - 1 {
+                let contact_points =
+                    find_contanct_points(&transform_a, collider_a, &transform_b, collider_b);
+                collision_entitties.push((entity_a, entity_b, collision_info, contact_points));
+            }
+        }
+    }
+}
+
+pub fn narrow_phase(
+    query: &mut Query<'_, '_, (Entity, &mut Transform, &mut FlatBody, &Collider)>,
+    collision_entitties: &Vec<(Entity, Entity, CollisionDetails, ContactPoints)>,
+) {
+    for (entity_a, entity_b, collision_details, contact_points) in collision_entitties.iter() {
+        let [
+            (entity_a, mut transform_a, mut flat_body_a, collider_a),
+            (entity_b, mut transform_b, mut flat_body_b, collider_b),
+        ] = match query.get_many_mut([*entity_a, *entity_b]) {
+            Ok(val) => val,
+            Err(_) => continue,
+        };
+
+        let (impulse_a, impulse_b) = match resolve_collision(
+            &flat_body_a,
+            &flat_body_b,
+            &collision_details.collision_normal,
+            collision_details.penetration_depth,
+        ) {
+            Some((impulse_a, impulse_b)) => (impulse_a, impulse_b),
+            None => continue,
+        };
+
+        flat_body_a.linear_velocity += impulse_a;
+        flat_body_b.linear_velocity += impulse_b;
+    }
 }
