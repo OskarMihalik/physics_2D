@@ -1,12 +1,16 @@
 use crate::{
     collisions::{
-        Collider, CollisionDetails, ContactPoints, find_contanct_points, intersect_circle_circle,
-        intersect_circle_polygon, intersects_polygons, separate_bodies,
+        Collider, CollisionDetails, ContactPoints, Shape, find_contanct_points, intersect_aabbs,
+        intersect_circle_circle, intersect_circle_polygon, intersects_polygons, separate_bodies,
     },
     flat_body::{FlatBody, FlatBodyType},
     helpers::{get_global_vertices, to_vec2},
 };
-use bevy::{ecs::query::QueryCombinationIter, prelude::*};
+use bevy::{
+    ecs::query::QueryCombinationIter,
+    math::{FloatPow, VectorSpace},
+    prelude::*,
+};
 
 #[derive(Resource, Default)]
 pub struct FlatWorld {
@@ -16,7 +20,7 @@ pub struct FlatWorld {
     pub world_step_time_s: u128,
 }
 
-pub fn resolve_collision(
+pub fn resolve_collision_basic(
     body_a: &FlatBody,
     body_b: &FlatBody,
     normal: &Vec2,
@@ -41,6 +45,66 @@ pub fn resolve_collision(
     return Some((impulse_a, impulse_b));
 }
 
+pub fn resolve_collision_with_rotation(
+    body_a: &mut FlatBody,
+    transform_a: &Transform,
+    body_b: &mut FlatBody,
+    transform_b: &Transform,
+    contact_points: &ContactPoints,
+    normal: &Vec2,
+    depth: f32,
+) {
+    let e = body_a.restitution.min(body_b.restitution);
+    let mut impulses: Vec<Vec2> = vec![Vec2::ZERO; contact_points.len()];
+    let mut ra_list: Vec<Vec2> = vec![Vec2::ZERO; contact_points.len()];
+    let mut rb_list: Vec<Vec2> = vec![Vec2::ZERO; contact_points.len()];
+
+    for (i, contact_point) in contact_points.iter().enumerate() {
+        let ra = contact_point - to_vec2(&transform_a.translation);
+        let rb = contact_point - to_vec2(&transform_b.translation);
+
+        let ra_perp = Vec2::new(-ra.y, ra.x);
+        let rb_perp = Vec2::new(-rb.y, rb.x);
+
+        let angular_linear_velocity_a = ra_perp * body_a.angular_velocity;
+        let angular_linear_velocity_b = rb_perp * body_b.angular_velocity;
+
+        let relative_velocity = (body_b.linear_velocity + angular_linear_velocity_b)
+            - (body_a.linear_velocity + angular_linear_velocity_a);
+
+        let contact_velocity_magnitude = relative_velocity.dot(*normal);
+
+        if contact_velocity_magnitude > 0. {
+            // bodies are already separating from each other
+            continue;
+        }
+
+        let ra_perp_dot_n = ra_perp.dot(*normal);
+        let rb_perp_dot_n = rb_perp.dot(*normal);
+
+        let denom = body_a.inv_mass()
+            + body_b.inv_mass()
+            + (ra_perp_dot_n.squared() * body_a.inv_inertia())
+            + (rb_perp_dot_n.squared() * body_b.inv_inertia());
+
+        let mut j = -(1. + e) * contact_velocity_magnitude;
+        j /= denom;
+        j /= contact_points.len() as f32;
+
+        let impulse = j * normal;
+        impulses[i] = impulse;
+        ra_list[i] = ra;
+        rb_list[i] = rb;
+    }
+
+    for (i, impulse) in impulses.iter().enumerate() {
+        body_a.linear_velocity += -impulse * body_a.inv_mass();
+        body_a.angular_velocity += -ra_list[i].perp_dot(*impulse) * body_a.inv_inertia();
+        body_b.linear_velocity += impulse * body_b.inv_mass();
+        body_b.angular_velocity += rb_list[i].perp_dot(*impulse) * body_b.inv_inertia();
+    }
+}
+
 pub fn collide(
     entity_a: (&Transform, &Collider),
     entity_b: (&Transform, &Collider),
@@ -48,8 +112,8 @@ pub fn collide(
     let (pos_a, collider_a) = entity_a;
     let (pos_b, collider_b) = entity_b;
 
-    if let Collider::Box(box_params_a) = collider_a {
-        if let Collider::Box(box_params_b) = collider_b {
+    if let Shape::Box(box_params_a) = &collider_a.shape {
+        if let Shape::Box(box_params_b) = &collider_b.shape {
             let vertices_a = get_global_vertices(&pos_a, &box_params_a.verticies);
             let vertices_b = get_global_vertices(&pos_b, &box_params_b.verticies);
 
@@ -59,7 +123,7 @@ pub fn collide(
                 &vertices_b,
                 &to_vec2(&pos_b.translation),
             );
-        } else if let Collider::Circle(circle_params_b) = collider_b {
+        } else if let Shape::Circle(circle_params_b) = &collider_b.shape {
             let vertices_a = get_global_vertices(&pos_a, &box_params_a.verticies);
 
             let mut collision = intersect_circle_polygon(
@@ -74,8 +138,8 @@ pub fn collide(
             }
             return collision;
         }
-    } else if let Collider::Circle(circle_params_a) = collider_a {
-        if let Collider::Box(box_params_b) = collider_b {
+    } else if let Shape::Circle(circle_params_a) = &collider_a.shape {
+        if let Shape::Box(box_params_b) = &collider_b.shape {
             let vertices_a = get_global_vertices(&pos_b, &box_params_b.verticies);
 
             return intersect_circle_polygon(
@@ -84,7 +148,7 @@ pub fn collide(
                 &vertices_a,
                 &to_vec2(&pos_b.translation),
             );
-        } else if let Collider::Circle(circle_params_b) = collider_b {
+        } else if let Shape::Circle(circle_params_b) = &collider_b.shape {
             return intersect_circle_circle(
                 to_vec2(&pos_a.translation),
                 circle_params_a.radius,
@@ -98,17 +162,13 @@ pub fn collide(
 }
 
 pub fn broad_phase(
-    query: &mut Query<'_, '_, (Entity, &mut Transform, &mut FlatBody, &Collider)>,
-    collision_entitties: &mut Vec<(Entity, Entity, CollisionDetails, ContactPoints)>,
-    iteration: u32,
-    iterations: u32,
+    query: &mut Query<'_, '_, (Entity, &mut Transform, &mut FlatBody, &mut Collider)>,
+    collision_entitties: &mut Vec<(Entity, Entity)>,
 ) {
     let mut combinations = query.iter_combinations_mut();
     while let Some([a1, a2]) = combinations.fetch_next() {
-        let (entity_a, mut transform_a, flat_body_a, collider_a) = a1;
-        let (entity_b, mut transform_b, flat_body_b, collider_b) = a2;
-
-        let collision = collide((&transform_a, collider_a), (&transform_b, collider_b));
+        let (entity_a, mut transform_a, flat_body_a, mut collider_a) = a1;
+        let (entity_b, mut transform_b, flat_body_b, mut collider_b) = a2;
 
         if let FlatBodyType::Static = flat_body_a.body_type
             && let FlatBodyType::Static = flat_body_b.body_type
@@ -116,6 +176,31 @@ pub fn broad_phase(
             continue;
         }
 
+        if !intersect_aabbs(
+            &collider_a.get_aabb(&transform_a),
+            &collider_b.get_aabb(&transform_b),
+        ) {
+            continue;
+        }
+
+        collision_entitties.push((entity_a, entity_b));
+    }
+}
+
+pub fn narrow_phase(
+    query: &mut Query<'_, '_, (Entity, &mut Transform, &mut FlatBody, &mut Collider)>,
+    collision_entitties: &Vec<(Entity, Entity)>,
+) {
+    for (entity_a, entity_b) in collision_entitties.iter() {
+        let [
+            (_entity_a, mut transform_a, mut flat_body_a, collider_a),
+            (_entity_b, mut transform_b, mut flat_body_b, collider_b),
+        ] = match query.get_many_mut([*entity_a, *entity_b]) {
+            Ok(val) => val,
+            Err(_) => continue,
+        };
+
+        let collision = collide((&transform_a, &collider_a), (&transform_b, &collider_b));
         if let Some(collision_info) = collision {
             separate_bodies(
                 &mut transform_a,
@@ -124,39 +209,30 @@ pub fn broad_phase(
                 &flat_body_b,
                 &collision_info,
             );
-            if iteration == iterations - 1 {
-                let contact_points =
-                    find_contanct_points(&transform_a, collider_a, &transform_b, collider_b);
-                collision_entitties.push((entity_a, entity_b, collision_info, contact_points));
-            }
+            let contact_points =
+                find_contanct_points(&transform_a, &collider_a, &transform_b, &collider_b);
+
+            // resolve_collision_with_rotation(
+            //     &mut flat_body_a,
+            //     &transform_a,
+            //     &mut flat_body_b,
+            //     &transform_b,
+            //     &contact_points,
+            //     &collision_info.collision_normal,
+            //     collision_info.penetration_depth,
+            // )
+            let (impulse_a, impulse_b) = match resolve_collision_basic(
+                &flat_body_a,
+                &flat_body_b,
+                &collision_info.collision_normal,
+                collision_info.penetration_depth,
+            ) {
+                Some((impulse_a, impulse_b)) => (impulse_a, impulse_b),
+                None => continue,
+            };
+
+            flat_body_a.linear_velocity += impulse_a;
+            flat_body_b.linear_velocity += impulse_b;
         }
-    }
-}
-
-pub fn narrow_phase(
-    query: &mut Query<'_, '_, (Entity, &mut Transform, &mut FlatBody, &Collider)>,
-    collision_entitties: &Vec<(Entity, Entity, CollisionDetails, ContactPoints)>,
-) {
-    for (entity_a, entity_b, collision_details, contact_points) in collision_entitties.iter() {
-        let [
-            (entity_a, mut transform_a, mut flat_body_a, collider_a),
-            (entity_b, mut transform_b, mut flat_body_b, collider_b),
-        ] = match query.get_many_mut([*entity_a, *entity_b]) {
-            Ok(val) => val,
-            Err(_) => continue,
-        };
-
-        let (impulse_a, impulse_b) = match resolve_collision(
-            &flat_body_a,
-            &flat_body_b,
-            &collision_details.collision_normal,
-            collision_details.penetration_depth,
-        ) {
-            Some((impulse_a, impulse_b)) => (impulse_a, impulse_b),
-            None => continue,
-        };
-
-        flat_body_a.linear_velocity += impulse_a;
-        flat_body_b.linear_velocity += impulse_b;
     }
 }

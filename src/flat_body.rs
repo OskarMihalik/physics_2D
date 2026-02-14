@@ -1,6 +1,11 @@
+use std::f32;
+
 use bevy::prelude::*;
 
-use crate::{collisions::Collider, helpers::to_vec3};
+use crate::{
+    collisions::{Collider, Shape},
+    helpers::{get_global_vertices, to_vec3},
+};
 
 #[derive(Default, Debug)]
 pub enum FlatBodyType {
@@ -63,7 +68,7 @@ impl FlatBody {
         self.inertia
     }
 
-    pub fn inf_inertia(&self) -> f32 {
+    pub fn inv_inertia(&self) -> f32 {
         self.inv_inertia
     }
 }
@@ -124,13 +129,13 @@ impl BoxParams {
 }
 
 pub fn calculate_rotational_inertia(collider: &Collider, flat_body: &FlatBody) -> f32 {
-    match collider {
-        Collider::Box(box_params) => {
+    match &collider.shape {
+        Shape::Box(box_params) => {
             return (1. / 12.)
                 * flat_body.mass
                 * (box_params.width.sqrt() + box_params.height.sqrt());
         }
-        Collider::Circle(circle_params) => {
+        Shape::Circle(circle_params) => {
             return (1. / 2.) * flat_body.mass * circle_params.radius.sqrt();
         }
     }

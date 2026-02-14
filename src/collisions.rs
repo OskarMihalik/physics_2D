@@ -1,5 +1,6 @@
 use core::f32;
 
+use crate::flat_aabb::FlatAABB;
 use crate::helpers::{get_global_vertices, nearly_equal, nearly_equal_vec};
 use crate::{
     flat_body::{BoxParams, CircleParams, FlatBody, FlatBodyType},
@@ -8,20 +9,79 @@ use crate::{
 use bevy::prelude::*;
 use bevy::{ecs::component::Component, math::Vec2};
 
-#[derive(Component)]
-pub enum Collider {
+#[derive(Component, Default)]
+pub struct Collider {
+    aabb: FlatAABB,
+    update_aabb: bool,
+    pub shape: Shape,
+}
+
+pub enum Shape {
     Box(BoxParams),
     Circle(CircleParams),
 }
 
-impl Default for Collider {
+impl Default for Shape {
     fn default() -> Self {
-        Collider::Box(BoxParams {
+        Shape::Box(BoxParams {
             width: 0.,
             height: 0.,
             area: 0.,
             verticies: [Vec2::ZERO, Vec2::ZERO, Vec2::ZERO, Vec2::ZERO],
         })
+    }
+}
+
+impl Collider {
+    pub fn new(shape: Shape) -> Self {
+        Collider {
+            shape: shape,
+            ..Default::default()
+        }
+    }
+
+    pub fn update_aabb(&mut self) {
+        self.update_aabb = true;
+    }
+
+    pub fn get_aabb(&mut self, transform: &Transform) -> &FlatAABB {
+        // if !self.update_aabb {
+        //     return &self.aabb;
+        // }
+
+        let mut min_x = f32::MAX;
+        let mut min_y = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut max_y = f32::MIN;
+
+        match &self.shape {
+            Shape::Box(box_params) => {
+                let vertices = get_global_vertices(transform, &box_params.verticies);
+                for v in vertices {
+                    if v.x < min_x {
+                        min_x = v.x;
+                    }
+                    if v.x > max_x {
+                        max_x = v.x;
+                    }
+                    if v.y < min_y {
+                        min_y = v.y;
+                    }
+                    if v.y > max_y {
+                        max_y = v.y;
+                    }
+                }
+            }
+            Shape::Circle(circle_params) => {
+                min_x = transform.translation.x - circle_params.radius;
+                min_y = transform.translation.y - circle_params.radius;
+                max_x = transform.translation.x + circle_params.radius;
+                max_y = transform.translation.y + circle_params.radius;
+            }
+        }
+        self.aabb = FlatAABB::new(min_x, min_y, max_x, max_y);
+        self.update_aabb = false;
+        return &self.aabb;
     }
 }
 
@@ -295,7 +355,7 @@ fn find_contact_point_polygon_circle(
             cp = contact.clone();
         }
     }
-    return ContactPoints::One(cp);
+    return vec![cp];
 }
 
 fn find_contact_points_polygon_polygon(
@@ -350,16 +410,13 @@ fn find_contact_points_polygon_polygon(
     }
 
     if contact_count == 2 {
-        return ContactPoints::Two((contact1, contact2));
+        return vec![contact1, contact2];
     };
 
-    return ContactPoints::One(contact1);
+    return vec![contact1];
 }
 
-pub enum ContactPoints {
-    One(Vec2),
-    Two((Vec2, Vec2)),
-}
+pub type ContactPoints = Vec<Vec2>;
 
 pub fn find_contanct_points(
     trans_a: &Transform,
@@ -367,13 +424,13 @@ pub fn find_contanct_points(
     trans_b: &Transform,
     collider_b: &Collider,
 ) -> ContactPoints {
-    match (collider_a, collider_b) {
-        (Collider::Box(box_params_a), Collider::Box(box_params_b)) => {
+    match (&collider_a.shape, &collider_b.shape) {
+        (Shape::Box(box_params_a), Shape::Box(box_params_b)) => {
             let vertices_a = get_global_vertices(&trans_a, &box_params_a.verticies);
             let vertices_b = get_global_vertices(&trans_b, &box_params_b.verticies);
             return find_contact_points_polygon_polygon(&vertices_a, &vertices_b);
         }
-        (Collider::Box(box_params_a), Collider::Circle(circle_params_b)) => {
+        (Shape::Box(box_params_a), Shape::Circle(circle_params_b)) => {
             let pos_a = to_vec2(&trans_a.translation);
             let vertices_a = get_global_vertices(&trans_a, &box_params_a.verticies);
             return find_contact_point_polygon_circle(
@@ -383,7 +440,7 @@ pub fn find_contanct_points(
                 &vertices_a,
             );
         }
-        (Collider::Circle(circle_params_a), Collider::Box(box_params_b)) => {
+        (Shape::Circle(circle_params_a), Shape::Box(box_params_b)) => {
             let pos_b = to_vec2(&trans_b.translation);
             let vertices_b = get_global_vertices(&trans_b, &box_params_b.verticies);
             return find_contact_point_polygon_circle(
@@ -393,13 +450,21 @@ pub fn find_contanct_points(
                 &vertices_b,
             );
         }
-        (Collider::Circle(circle_params_a), Collider::Circle(_circle_params_b)) => {
+        (Shape::Circle(circle_params_a), Shape::Circle(_circle_params_b)) => {
             let contact_point = find_contanct_point(
                 &to_vec2(&trans_a.translation),
                 circle_params_a.radius,
                 &to_vec2(&trans_b.translation),
             );
-            ContactPoints::One(contact_point)
+            vec![contact_point]
         }
     }
+}
+
+pub fn intersect_aabbs(a: &FlatAABB, b: &FlatAABB) -> bool {
+    if a.max.x <= b.min.x || b.max.x <= a.min.x || a.max.y <= b.min.y || b.max.y <= a.min.y {
+        return false;
+    }
+
+    return true;
 }

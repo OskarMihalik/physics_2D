@@ -8,19 +8,20 @@ mod flat_body;
 mod mouse_position;
 use flat_body::FlatBody;
 mod collisions;
+mod flat_aabb;
 mod flat_manifold;
 mod flat_world;
 mod helpers;
 
 use crate::{
     collisions::{
-        Collider, CollisionDetails, ContactPoints, find_contanct_points, separate_bodies,
+        Collider, CollisionDetails, ContactPoints, Shape, find_contanct_points, separate_bodies,
     },
     flat_body::{
         BoxParams, CircleParams, FlatBodyType, handle_physics_step, on_flat_body_added,
         on_move_flat_body, on_rotate_flat_body,
     },
-    flat_world::{FlatWorld, broad_phase, collide, narrow_phase, resolve_collision},
+    flat_world::{FlatWorld, broad_phase, collide, narrow_phase, resolve_collision_basic},
     mouse_position::{MousePositionPlugin, MyWorldCoords},
 };
 
@@ -29,7 +30,7 @@ fn main() {
         .add_plugins((DefaultPlugins, MousePositionPlugin))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
         .insert_resource(FlatWorld {
-            gravity: Vec2::new(0., -309.81),
+            gravity: Vec2::new(0., -300.),
             iterations: 3,
             ..Default::default()
         })
@@ -120,7 +121,7 @@ fn setup(
             -0.3,
         )),
         FlatBody::new(1., FlatBodyType::Static, 0.5),
-        Collider::Box(BoxParams::new(400., 30.)),
+        Collider::new(Shape::Box(BoxParams::new(400., 30.))),
     ));
 
     commands.spawn((
@@ -134,7 +135,7 @@ fn setup(
             0.3,
         )),
         FlatBody::new(1., FlatBodyType::Static, 0.5),
-        Collider::Box(BoxParams::new(400., 30.)),
+        Collider::new(Shape::Box(BoxParams::new(400., 30.))),
     ));
 
     commands.spawn((
@@ -142,7 +143,7 @@ fn setup(
         MeshMaterial2d(materials.add(Color::srgb(0., 0., 1.))),
         Transform::from_xyz(0.0, 50.0 * -9.0, 0.0),
         FlatBody::new(1., FlatBodyType::Static, 0.5),
-        Collider::Box(BoxParams::new(700., 30.)),
+        Collider::new(Shape::Box(BoxParams::new(700., 30.))),
     ));
 
     // commands.spawn((
@@ -170,7 +171,8 @@ fn spawn_physics_object(
             MeshMaterial2d(materials.add(Color::srgb(random_red, random_green, random_blue))),
             Transform::from_xyz(cursor_position.0.x, cursor_position.0.y, 0.0),
             FlatBody::new(1., FlatBodyType::Dynamic, 0.5),
-            Collider::Circle(CircleParams::new(50.)),
+            // Collider::Circle(CircleParams::new(50.)),
+            Collider::new(Shape::Circle(CircleParams::new(50.))),
         ));
     } else if buttons.just_pressed(MouseButton::Right) {
         // square
@@ -180,16 +182,16 @@ fn spawn_physics_object(
             Transform::from_xyz(cursor_position.0.x, cursor_position.0.y, 0.0)
                 .with_rotation(Quat::from_euler(EulerRot::XYZ, 0., 0., 0.)),
             FlatBody::new(1., FlatBodyType::Dynamic, 0.5),
-            Collider::Box(BoxParams::new(100., 100.)),
+            Collider::new(Shape::Box(BoxParams::new(100., 100.))),
         ));
     }
 }
 
 fn world_step(
     fixed_time: Res<Time<Fixed>>,
-    mut query: Query<(Entity, &mut Transform, &mut FlatBody, &Collider)>,
+    mut query: Query<(Entity, &mut Transform, &mut FlatBody, &mut Collider)>,
     mut flat_world: ResMut<FlatWorld>,
-    mut collision_entitties: Local<Vec<(Entity, Entity, CollisionDetails, ContactPoints)>>,
+    mut collision_entitties: Local<Vec<(Entity, Entity)>>,
     mut gizmos: Gizmos,
 ) {
     let world_step_start = SystemTime::now();
@@ -198,8 +200,10 @@ fn world_step(
 
     for iteration in 0..flat_world.iterations {
         let delta_time = delta_time_origin / (flat_world.iterations as f32);
+        collision_entitties.clear();
+
         // physics step
-        for (_entity, mut transform, mut flat_body, _) in query.iter_mut() {
+        for (_entity, mut transform, mut flat_body, mut collider) in query.iter_mut() {
             if let FlatBodyType::Static = flat_body.body_type {
                 continue;
             }
@@ -210,19 +214,14 @@ fn world_step(
                 &flat_world.gravity,
                 delta_time,
             );
+            // collider.update_aabb();
         }
 
         // Collision step
-        collision_entitties.clear();
-        broad_phase(
-            &mut query,
-            &mut collision_entitties,
-            iteration,
-            flat_world.iterations,
-        );
+        broad_phase(&mut query, &mut collision_entitties);
+        // collision resolve
+        narrow_phase(&mut query, &collision_entitties);
     }
 
-    // collision resolve
-    narrow_phase(&mut query, &collision_entitties);
     flat_world.world_step_time_s = world_step_start.elapsed().unwrap().as_micros();
 }
