@@ -3,7 +3,10 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use bevy::{color::palettes::css::LIME, prelude::*};
+use bevy::{
+    color::palettes::css::{LIME, WHITE},
+    prelude::*,
+};
 mod flat_body;
 mod mouse_position;
 use flat_body::FlatBody;
@@ -14,14 +17,12 @@ mod flat_world;
 mod helpers;
 
 use crate::{
-    collisions::{
-        Collider, CollisionDetails, ContactPoints, Shape, find_contanct_points, separate_bodies,
-    },
+    collisions::{Collider, Shape},
     flat_body::{
         BoxParams, CircleParams, FlatBodyType, handle_physics_step, on_flat_body_added,
         on_move_flat_body, on_rotate_flat_body,
     },
-    flat_world::{FlatWorld, broad_phase, collide, narrow_phase, resolve_collision_basic},
+    flat_world::{FlatWorld, broad_phase, narrow_phase},
     mouse_position::{MousePositionPlugin, MyWorldCoords},
 };
 
@@ -38,7 +39,10 @@ fn main() {
             timer: Timer::new(Duration::from_secs(1), TimerMode::Repeating),
         })
         .add_systems(Startup, (setup, spawn_text_in_ui).chain())
-        .add_systems(Update, (spawn_physics_object, diagnosis_ui))
+        .add_systems(
+            Update,
+            (spawn_physics_object, diagnosis_ui, draw_line_for_circle),
+        )
         .add_systems(FixedUpdate, (world_step).chain())
         .add_observer(on_move_flat_body)
         .add_observer(on_rotate_flat_body)
@@ -224,4 +228,16 @@ fn world_step(
     }
 
     flat_world.world_step_time_s = world_step_start.elapsed().unwrap().as_micros();
+}
+
+fn draw_line_for_circle(
+    query: Query<(Entity, &Transform, &FlatBody, &Collider)>,
+    mut gizmos: Gizmos,
+) {
+    for (_entity, transform, flat_body, collider) in query.iter() {
+        if let Shape::Circle(circle_params) = &collider.shape {
+            let rotated = transform.rotation * Vec3::X * circle_params.radius;
+            gizmos.ray(transform.translation, rotated, WHITE);
+        }
+    }
 }

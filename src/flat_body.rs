@@ -133,10 +133,10 @@ pub fn calculate_rotational_inertia(collider: &Collider, flat_body: &FlatBody) -
         Shape::Box(box_params) => {
             return (1. / 12.)
                 * flat_body.mass
-                * (box_params.width.sqrt() + box_params.height.sqrt());
+                * (box_params.width.powi(2) + box_params.height.powi(2));
         }
         Shape::Circle(circle_params) => {
-            return (1. / 2.) * flat_body.mass * circle_params.radius.sqrt();
+            return (1. / 2.) * flat_body.mass * circle_params.radius.powi(2);
         }
     }
 }
@@ -194,7 +194,7 @@ pub fn handle_physics_step(
     transform.translation.x += flat_body.linear_velocity.x * delta_time;
     transform.translation.y += flat_body.linear_velocity.y * delta_time;
 
-    let rotation_radians = flat_body.angular_velocity.to_radians();
+    let rotation_radians = flat_body.angular_velocity;
     let current_rotation = transform.rotation.to_euler(EulerRot::XYZ).2;
     transform.rotation = Quat::from_euler(
         EulerRot::XYZ,

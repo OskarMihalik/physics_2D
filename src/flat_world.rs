@@ -212,27 +212,27 @@ pub fn narrow_phase(
             let contact_points =
                 find_contanct_points(&transform_a, &collider_a, &transform_b, &collider_b);
 
-            // resolve_collision_with_rotation(
-            //     &mut flat_body_a,
-            //     &transform_a,
-            //     &mut flat_body_b,
-            //     &transform_b,
-            //     &contact_points,
-            //     &collision_info.collision_normal,
-            //     collision_info.penetration_depth,
-            // )
-            let (impulse_a, impulse_b) = match resolve_collision_basic(
-                &flat_body_a,
-                &flat_body_b,
+            resolve_collision_with_rotation(
+                &mut flat_body_a,
+                &transform_a,
+                &mut flat_body_b,
+                &transform_b,
+                &contact_points,
                 &collision_info.collision_normal,
                 collision_info.penetration_depth,
-            ) {
-                Some((impulse_a, impulse_b)) => (impulse_a, impulse_b),
-                None => continue,
-            };
+            )
+            // let (impulse_a, impulse_b) = match resolve_collision_basic(
+            //     &flat_body_a,
+            //     &flat_body_b,
+            //     &collision_info.collision_normal,
+            //     collision_info.penetration_depth,
+            // ) {
+            //     Some((impulse_a, impulse_b)) => (impulse_a, impulse_b),
+            //     None => continue,
+            // };
 
-            flat_body_a.linear_velocity += impulse_a;
-            flat_body_b.linear_velocity += impulse_b;
+            // flat_body_a.linear_velocity += impulse_a;
+            // flat_body_b.linear_velocity += impulse_b;
         }
     }
 }
