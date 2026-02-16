@@ -6,6 +6,7 @@ use crate::{
     flat_body::{BoxParams, CircleParams, FlatBody, FlatBodyType},
     helpers::{to_vec2, to_vec3},
 };
+use bevy::color::palettes::css::LIME;
 use bevy::prelude::*;
 use bevy::{ecs::component::Component, math::Vec2};
 
@@ -239,7 +240,7 @@ pub fn intersects_polygons(
         let vb = vertices_b[(i + 1) % vertices_b.len()];
 
         let edge = vb - va;
-        let axis = Vec2::new(-edge.x, edge.y).normalize();
+        let axis = Vec2::new(-edge.y, edge.x).normalize();
         let (min_a, max_a) = project_vertices(vertices_a, &axis);
         let (min_b, max_b) = project_vertices(vertices_b, &axis);
 
@@ -259,7 +260,6 @@ pub fn intersects_polygons(
     if direction.dot(normal) < 0. {
         normal = -normal;
     }
-
     return Some(CollisionDetails {
         penetration_depth: depth,
         collision_normal: normal,
@@ -428,6 +428,7 @@ pub fn find_contanct_points(
         (Shape::Box(box_params_a), Shape::Box(box_params_b)) => {
             let vertices_a = get_global_vertices(&trans_a, &box_params_a.verticies);
             let vertices_b = get_global_vertices(&trans_b, &box_params_b.verticies);
+
             return find_contact_points_polygon_polygon(&vertices_a, &vertices_b);
         }
         (Shape::Box(box_params_a), Shape::Circle(circle_params_b)) => {

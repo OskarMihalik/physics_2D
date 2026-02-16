@@ -30,5 +30,5 @@ pub fn nearly_equal(a: f32, b: f32) -> bool {
 }
 
 pub fn nearly_equal_vec(a: &Vec2, b: &Vec2) -> bool {
-    return a.distance_squared(*b) < MIN_TRESHOLD_DISTANCE.sqrt();
+    return a.distance_squared(*b) < MIN_TRESHOLD_DISTANCE.powi(2);
 }
