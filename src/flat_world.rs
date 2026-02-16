@@ -6,12 +6,7 @@ use crate::{
     flat_body::{FlatBody, FlatBodyType},
     helpers::{get_global_vertices, nearly_equal_vec, to_vec2},
 };
-use bevy::{
-    color::palettes::css::LIME,
-    ecs::query::QueryCombinationIter,
-    math::{FloatPow, VectorSpace},
-    prelude::*,
-};
+use bevy::{math::FloatPow, prelude::*};
 
 #[derive(Resource, Default)]
 pub struct FlatWorld {
@@ -25,7 +20,6 @@ pub fn resolve_collision_basic(
     body_a: &FlatBody,
     body_b: &FlatBody,
     normal: &Vec2,
-    depth: f32,
 ) -> Option<(Vec2, Vec2)> {
     let relative_velocity = body_b.linear_velocity - body_a.linear_velocity;
 
@@ -53,7 +47,6 @@ pub fn resolve_collision_with_rotation(
     transform_b: &Transform,
     contact_points: &ContactPoints,
     normal: &Vec2,
-    depth: f32,
 ) {
     let e = body_a.restitution.min(body_b.restitution);
     let mut impulses: Vec<Vec2> = vec![Vec2::ZERO; contact_points.len()];
@@ -113,7 +106,6 @@ pub fn resolve_collision_with_rotation_and_friction(
     transform_b: &Transform,
     contact_points: &ContactPoints,
     normal: &Vec2,
-    depth: f32,
 ) {
     let e = body_a.restitution.min(body_b.restitution);
     let sf = (body_a.static_friction() + body_b.static_friction()) * 0.5;
@@ -286,8 +278,8 @@ pub fn broad_phase(
 ) {
     let mut combinations = query.iter_combinations_mut();
     while let Some([a1, a2]) = combinations.fetch_next() {
-        let (entity_a, mut transform_a, flat_body_a, mut collider_a) = a1;
-        let (entity_b, mut transform_b, flat_body_b, mut collider_b) = a2;
+        let (entity_a, transform_a, flat_body_a, mut collider_a) = a1;
+        let (entity_b, transform_b, flat_body_b, mut collider_b) = a2;
 
         if let FlatBodyType::Static = flat_body_a.body_type
             && let FlatBodyType::Static = flat_body_b.body_type
@@ -338,7 +330,6 @@ pub fn narrow_phase(
                 &transform_b,
                 &contact_points,
                 &collision_info.collision_normal,
-                collision_info.penetration_depth,
             )
         }
     }

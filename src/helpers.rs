@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-const MIN_TRESHOLD_DISTANCE: f32 = 0.0005;
+const MIN_TRESHOLD_DISTANCE: f32 = 0.005;
 
 pub fn to_vec2(vec3: &Vec3) -> Vec2 {
     Vec2::new(vec3.x, vec3.y)

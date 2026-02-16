@@ -6,7 +6,6 @@ use crate::{
     flat_body::{BoxParams, CircleParams, FlatBody, FlatBodyType},
     helpers::{to_vec2, to_vec3},
 };
-use bevy::color::palettes::css::LIME;
 use bevy::prelude::*;
 use bevy::{ecs::component::Component, math::Vec2};
 
@@ -27,7 +26,6 @@ impl Default for Shape {
         Shape::Box(BoxParams {
             width: 0.,
             height: 0.,
-            area: 0.,
             verticies: [Vec2::ZERO, Vec2::ZERO, Vec2::ZERO, Vec2::ZERO],
         })
     }
@@ -321,7 +319,7 @@ fn point_segment_distance(p: &Vec2, a: &Vec2, b: &Vec2) -> (f32, Vec2) {
     let ab_len_sq = ab.length_squared();
     let d = proj / ab_len_sq;
 
-    let mut contact_point = Vec2::ZERO;
+    let contact_point;
     if d <= 0. {
         contact_point = a.clone();
     } else if d >= 1. {
@@ -337,8 +335,6 @@ fn point_segment_distance(p: &Vec2, a: &Vec2, b: &Vec2) -> (f32, Vec2) {
 
 fn find_contact_point_polygon_circle(
     circle_center: &Vec2,
-    circle_radius: f32,
-    polygon_center: &Vec2,
     polygon_vertices: &[Vec2; 4],
 ) -> ContactPoints {
     let mut cp = Vec2::ZERO;
@@ -431,25 +427,13 @@ pub fn find_contanct_points(
 
             return find_contact_points_polygon_polygon(&vertices_a, &vertices_b);
         }
-        (Shape::Box(box_params_a), Shape::Circle(circle_params_b)) => {
-            let pos_a = to_vec2(&trans_a.translation);
+        (Shape::Box(box_params_a), Shape::Circle(_circle_params_b)) => {
             let vertices_a = get_global_vertices(&trans_a, &box_params_a.verticies);
-            return find_contact_point_polygon_circle(
-                &to_vec2(&trans_b.translation),
-                circle_params_b.radius,
-                &pos_a,
-                &vertices_a,
-            );
+            return find_contact_point_polygon_circle(&to_vec2(&trans_b.translation), &vertices_a);
         }
-        (Shape::Circle(circle_params_a), Shape::Box(box_params_b)) => {
-            let pos_b = to_vec2(&trans_b.translation);
+        (Shape::Circle(_circle_params_a), Shape::Box(box_params_b)) => {
             let vertices_b = get_global_vertices(&trans_b, &box_params_b.verticies);
-            return find_contact_point_polygon_circle(
-                &to_vec2(&trans_a.translation),
-                circle_params_a.radius,
-                &pos_b,
-                &vertices_b,
-            );
+            return find_contact_point_polygon_circle(&to_vec2(&trans_a.translation), &vertices_b);
         }
         (Shape::Circle(circle_params_a), Shape::Circle(_circle_params_b)) => {
             let contact_point = find_contanct_point(

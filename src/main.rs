@@ -1,27 +1,17 @@
-use std::{
-    collections::HashMap,
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
-use bevy::{
-    color::palettes::css::{LIME, WHITE},
-    prelude::*,
-};
+use bevy::{color::palettes::css::WHITE, prelude::*};
 mod flat_body;
 mod mouse_position;
 use flat_body::FlatBody;
 mod collisions;
 mod flat_aabb;
-mod flat_manifold;
 mod flat_world;
 mod helpers;
 
 use crate::{
     collisions::{Collider, Shape},
-    flat_body::{
-        BoxParams, CircleParams, FlatBodyType, handle_physics_step, on_flat_body_added,
-        on_move_flat_body, on_rotate_flat_body,
-    },
+    flat_body::{BoxParams, CircleParams, FlatBodyType, handle_physics_step, on_flat_body_added},
     flat_world::{FlatWorld, broad_phase, narrow_phase},
     mouse_position::{MousePositionPlugin, MyWorldCoords},
 };
@@ -32,7 +22,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
         .insert_resource(FlatWorld {
             gravity: Vec2::new(0., -300.),
-            iterations: 3,
+            iterations: 6,
             ..Default::default()
         })
         .insert_resource(DiagnosisConfig {
@@ -44,8 +34,6 @@ fn main() {
             (spawn_physics_object, diagnosis_ui, draw_line_for_circle),
         )
         .add_systems(FixedUpdate, (world_step).chain())
-        .add_observer(on_move_flat_body)
-        .add_observer(on_rotate_flat_body)
         .add_observer(on_flat_body_added)
         .run();
 }
@@ -196,18 +184,17 @@ fn world_step(
     mut query: Query<(Entity, &mut Transform, &mut FlatBody, &mut Collider)>,
     mut flat_world: ResMut<FlatWorld>,
     mut collision_entitties: Local<Vec<(Entity, Entity)>>,
-    mut gizmos: Gizmos,
 ) {
     let world_step_start = SystemTime::now();
     flat_world.body_count = query.count();
     let delta_time_origin = fixed_time.delta_secs();
 
-    for iteration in 0..flat_world.iterations {
+    for _iteration in 0..flat_world.iterations {
         let delta_time = delta_time_origin / (flat_world.iterations as f32);
         collision_entitties.clear();
 
         // physics step
-        for (_entity, mut transform, mut flat_body, mut collider) in query.iter_mut() {
+        for (_entity, mut transform, mut flat_body, mut _collider) in query.iter_mut() {
             if let FlatBodyType::Static = flat_body.body_type {
                 continue;
             }
@@ -234,7 +221,7 @@ fn draw_line_for_circle(
     query: Query<(Entity, &Transform, &FlatBody, &Collider)>,
     mut gizmos: Gizmos,
 ) {
-    for (_entity, transform, flat_body, collider) in query.iter() {
+    for (_entity, transform, _flat_body, collider) in query.iter() {
         if let Shape::Circle(circle_params) = &collider.shape {
             let rotated = transform.rotation * Vec3::X * circle_params.radius;
             gizmos.ray(transform.translation, rotated, WHITE);

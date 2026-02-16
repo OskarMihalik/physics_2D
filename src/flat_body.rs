@@ -2,10 +2,7 @@ use std::f32;
 
 use bevy::prelude::*;
 
-use crate::{
-    collisions::{Collider, Shape},
-    helpers::{get_global_vertices, to_vec3},
-};
+use crate::collisions::{Collider, Shape};
 
 #[derive(Default, Debug)]
 pub enum FlatBodyType {
@@ -97,13 +94,11 @@ pub fn on_flat_body_added(
 }
 pub struct CircleParams {
     pub radius: f32,
-    pub area: f32,
 }
 
 impl CircleParams {
     pub fn new(radius: f32) -> Self {
-        let area = std::f32::consts::PI * radius * radius;
-        CircleParams { radius, area }
+        CircleParams { radius }
     }
 }
 
@@ -111,7 +106,6 @@ impl CircleParams {
 pub struct BoxParams {
     pub width: f32,
     pub height: f32,
-    pub area: f32,
     pub verticies: [Vec2; 4],
 }
 
@@ -129,13 +123,10 @@ impl BoxParams {
             Vec2::new(left, bottom),
         ];
 
-        let area = width * height;
-
         BoxParams {
             width,
             height,
             verticies,
-            area,
         }
     }
 }
@@ -150,49 +141,6 @@ pub fn calculate_rotational_inertia(collider: &Collider, flat_body: &FlatBody) -
         Shape::Circle(circle_params) => {
             return (1. / 2.) * flat_body.mass * circle_params.radius.powi(2);
         }
-    }
-}
-
-#[derive(Event)]
-pub struct MoveFlatBody {
-    pub entity: Entity,
-    pub amount: Vec2,
-}
-
-pub fn on_move_flat_body(
-    trigger: On<MoveFlatBody>,
-    mut query: Query<(&mut Transform, &mut FlatBody)>,
-) {
-    let body = query.get_mut(trigger.entity);
-
-    match body {
-        Ok(mut body) => {
-            body.0.translation += to_vec3(&trigger.amount);
-        }
-        _ => {}
-    }
-}
-
-#[derive(Event)]
-pub struct RotateFlatBody {
-    pub entity: Entity,
-    pub amount: f32,
-}
-
-pub fn on_rotate_flat_body(
-    trigger: On<RotateFlatBody>,
-    mut query: Query<(&mut Transform, &mut FlatBody)>,
-) {
-    let body = query.get_mut(trigger.entity);
-
-    match body {
-        Ok(mut body) => {
-            body.0.rotate_z(trigger.amount);
-            // if let FlatBody::Dynamic() =  {
-
-            // }
-        }
-        _ => {}
     }
 }
 
