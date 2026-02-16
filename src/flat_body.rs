@@ -25,6 +25,8 @@ pub struct FlatBody {
     inv_mass: f32,
     inertia: f32,
     inv_inertia: f32,
+    static_friction: f32,
+    dynamic_friction: f32,
     pub body_type: FlatBodyType,
 }
 
@@ -34,6 +36,8 @@ impl FlatBody {
             mass,
             body_type,
             restitution,
+            static_friction: 0.6,
+            dynamic_friction: 0.4,
             ..Default::default()
         };
         // Setup inverse mass and restitution depending on body type.
@@ -70,6 +74,14 @@ impl FlatBody {
 
     pub fn inv_inertia(&self) -> f32 {
         self.inv_inertia
+    }
+
+    pub fn static_friction(&self) -> f32 {
+        self.static_friction
+    }
+
+    pub fn dynamic_friction(&self) -> f32 {
+        self.dynamic_friction
     }
 }
 
