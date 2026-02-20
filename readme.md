@@ -11,13 +11,30 @@ In this step we detect if flat bodies are colliding using aabb collision. We sav
 ## Narrow phase
 Now we iterate through saved colliding flat body pairs and find normal vector and depth. Normal vector tells us direction how to separate bodies and depth is how deep are the bodies inside each other. For this detection we are using separating axes theorem (SAT).
 ### SAT
-image and explanation of how it works
+For SAT we need positions of vertecies of the two polygons. We iterate through each side pair to create axis on which we project vertexes of both polygons. Then we check if all the projections are intersecting (min_b < max_a, ...). 
 
+![SAT](./readme/sat.excalidraw.png)
+
+![SAT_CIRCLE_POLYGON](./readme/sat_polygon_circle.excalidraw.png)
 ### Separating bodies
+By knowing normal vector and depth we can separate objects from each other.
 
 ### Finding contact points
+To be able to rotate bodies we also need precise points where the bodies are colliding.
+For finding out the the contact points we use distance from point to line formula, to find the closest point.
+
+![Contact_circle_circle](./readme/contact_circle_circle.excalidraw.png)
+
+![Contact_circle_circle](./readme/contact_circle_polygon.excalidraw.png)
+
+![Contact_circle_circle](./readme/contact_polygon_polygon.excalidraw.png)
 
 ### Resolving collision with rotation and friction
+Now we can calculate new angular and linear velocity based on contact points and old angular and linear velocity.
+
+![circle_rotation](./readme/circle_rotation.png)
+
+![polygon_rotation](./readme/polygon_rotation.png)
 
 # Further possible improvements
 - The bodies will start to wobble if stucked on each other
