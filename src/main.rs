@@ -205,7 +205,6 @@ fn world_step(
                 &flat_world.gravity,
                 delta_time,
             );
-            // collider.update_aabb();
         }
 
         // Collision step

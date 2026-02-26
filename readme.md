@@ -8,6 +8,8 @@ First the engine applyes linear and angular velocities and gravity to transform 
 ## Broad phase
 In this step we detect if flat bodies are colliding using aabb collision. We save colliding objects for further processing
 
+![aabb](./readme/aabb.excalidraw.png)
+
 ## Narrow phase
 Now we iterate through saved colliding flat body pairs and find normal vector and depth. Normal vector tells us direction how to separate bodies and depth is how deep are the bodies inside each other. For this detection we are using separating axes theorem (SAT).
 ### SAT
@@ -32,11 +34,17 @@ For finding out the the contact points we use distance from point to line formul
 ### Resolving collision with rotation and friction
 Now we can calculate new angular and linear velocity based on contact points and old angular and linear velocity.
 
+Rotational inertia formulas:
+
 ![circle_rotation](./readme/circle_rotation.png)
 
 ![polygon_rotation](./readme/polygon_rotation.png)
 
+Formula for new linear and angular velocity using impulse:
+
+![alt text](./readme/formula_hard.png)
+
 # Further possible improvements
-- The bodies will start to wobble if stucked on each other
+- The bodies will start to wobble if stacked on each other
 - Better integration with the engine
 - Make it into a package for others to use
