@@ -43,6 +43,7 @@ Rotational inertia formulas:
 Formula for new linear and angular velocity using impulse:
 
 ![alt text](./readme/formula_hard.png)
+https://www.chrishecker.com/images/e/e7/Gdmphys3.pdf
 
 # Further possible improvements
 - The bodies will start to wobble if stacked on each other
